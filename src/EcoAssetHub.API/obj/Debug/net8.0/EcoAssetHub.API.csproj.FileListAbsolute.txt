@@ -1,9 +1,3 @@
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.csproj.AssemblyReference.cache
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.GeneratedMSBuildEditorConfig.editorconfig
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.AssemblyInfoInputs.cache
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.AssemblyInfo.cs
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.csproj.CoreCompileInputs.cache
-C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.MvcApplicationPartsAssemblyInfo.cache
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\appsettings.Development.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\appsettings.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\FileData\570715000000088747.csv
@@ -39,7 +33,14 @@ C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\EcoAssetHub.Infrastructure.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\EcoAssetHub.Domain.pdb
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\bin\Debug\net8.0\EcoAssetHub.Infrastructure.pdb
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.csproj.AssemblyReference.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.GeneratedMSBuildEditorConfig.editorconfig
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.AssemblyInfoInputs.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.AssemblyInfo.cs
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.csproj.CoreCompileInputs.cache
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.MvcApplicationPartsAssemblyInfo.cs
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.MvcApplicationPartsAssemblyInfo.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\EcoAssetHub.API.sourcelink.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\staticwebassets.build.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\staticwebassets.development.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.API\obj\Debug\net8.0\staticwebassets\msbuild.EcoAssetHub.API.Microsoft.AspNetCore.StaticWebAssets.props

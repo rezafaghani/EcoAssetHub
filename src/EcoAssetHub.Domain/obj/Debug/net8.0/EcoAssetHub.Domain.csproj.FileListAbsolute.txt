@@ -6,6 +6,7 @@ C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\n
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.AssemblyInfoInputs.cache
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.AssemblyInfo.cs
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.csproj.CoreCompileInputs.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.sourcelink.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\refint\EcoAssetHub.Domain.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Domain\obj\Debug\net8.0\EcoAssetHub.Domain.pdb

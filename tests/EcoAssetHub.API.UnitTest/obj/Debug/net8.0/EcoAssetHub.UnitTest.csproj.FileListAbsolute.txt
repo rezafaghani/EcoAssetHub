@@ -1,9 +1,4 @@
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\CoverletSourceRootsMapping_EcoAssetHub.UnitTest
-C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.csproj.AssemblyReference.cache
-C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.GeneratedMSBuildEditorConfig.editorconfig
-C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.AssemblyInfoInputs.cache
-C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.AssemblyInfo.cs
-C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.csproj.CoreCompileInputs.cache
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\testhost.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\EcoAssetHub.API.deps.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\EcoAssetHub.API.runtimeconfig.json
@@ -130,6 +125,12 @@ C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\EcoAssetHub.API.pdb
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\EcoAssetHub.Infrastructure.pdb
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\bin\Debug\net8.0\EcoAssetHub.Domain.pdb
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.csproj.AssemblyReference.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.GeneratedMSBuildEditorConfig.editorconfig
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.AssemblyInfoInputs.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.AssemblyInfo.cs
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.csproj.CoreCompileInputs.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.sourcelink.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.csproj.CopyComplete
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\EcoAssetHub.UnitTest.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\tests\EcoAssetHub.API.UnitTest\obj\Debug\net8.0\refint\EcoAssetHub.UnitTest.dll

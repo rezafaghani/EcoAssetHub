@@ -8,6 +8,7 @@ C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.AssemblyInfoInputs.cache
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.AssemblyInfo.cs
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.csproj.CoreCompileInputs.cache
+C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.sourcelink.json
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.csproj.CopyComplete
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\EcoAssetHub.Infrastructure.dll
 C:\reza-repo\exprimental-projects\EcoAssetHub\src\EcoAssetHub.Infrastructure\obj\Debug\net8.0\refint\EcoAssetHub.Infrastructure.dll

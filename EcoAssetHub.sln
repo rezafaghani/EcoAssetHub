@@ -8,10 +8,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D962C237-88F1-4E5A-AAE1-E1C73B3305C9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EcoAssetHub.Infrastructure", "src\EcoAssetHub.Infrastructure\EcoAssetHub.Infrastructure.csproj", "{25B67A8B-3ED3-4E75-A0D1-98635F2B1E17}"
-	ProjectSection(ProjectDependencies) = postProject
-		{3EAAB889-9188-4749-9B9F-589CDBE8C2B3} = {3EAAB889-9188-4749-9B9F-589CDBE8C2B3}
-		{68877436-B693-4009-A128-D6930C9DEAD1} = {68877436-B693-4009-A128-D6930C9DEAD1}
-	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EcoAssetHub.Domain", "src\EcoAssetHub.Domain\EcoAssetHub.Domain.csproj", "{92C6FD5E-7FD3-4260-A252-4FAC08750420}"
 EndProject
