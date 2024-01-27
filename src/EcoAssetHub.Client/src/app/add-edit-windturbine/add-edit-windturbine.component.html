@@ -1,0 +1,28 @@
+<div class="d-flex flex-row bd-highlight mb-9">
+    <div class="p-2 w-100 bd-highlight">
+  <label>{{windTurbine.id}}</label>
+      <div class="input-group mb-12">
+        <span class="input-group-text">MeterPoint Id</span>
+        <input type="text" class="form-control" [(ngModel)]="meterPointId" title="MeterPoint Id">
+      </div>
+      <div class="input-group mb-12">
+        <span class="input-group-text">Hub Height</span>
+        <input type="text" class="form-control" [(ngModel)]="hubHeight" title="Hub Height">
+      </div>
+      <div class="input-group mb-12">
+        <span class="input-group-text">Rotor Diameter</span>
+        <input type="text" class="form-control" [(ngModel)]="rotorDiameter" title="Rotor Diameter">
+      </div>
+      <div class="input-group mb-12">
+        <span class="input-group-text">Capacity</span>
+        <input type="text" class="form-control" [(ngModel)]="capacity" title="Capacity">
+      </div>
+    </div>
+  </div>
+  <button (click)="addWindTurbine()" *ngIf="!windTurbine.id" class="btn btn-primary">
+    Add
+  </button>
+  
+  <button (click)="updateWindTurbine()" *ngIf="windTurbine.id" class="btn btn-primary">
+    Update
+  </button>

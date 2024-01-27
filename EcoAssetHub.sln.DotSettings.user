@@ -1,0 +1,21 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=2bd34a2a_002De52b_002D414a_002Daaf0_002De054036222f1/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ReadData_ShouldReturnCorrectData_WhenCsvIsValid" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
+  &lt;TestAncestor&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.CsvFileReaderTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.PowerProductionServiceTests.CreatePowerProduction_ShouldProcessFilesCorrectly&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.Services.PowerProductionServiceTests.CreatePowerProductionTest&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.Services.PowerProductionServiceTests.CreatePowerProduction_WithValidCsvFile_CreatesProductionRecords&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.Services.CsvFileReaderTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.Services.PowerProductionServiceTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.SolarPanelCommands.CreateCommands.CreateSolarPanelCommandHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.SolarPanelCommands.GetQueries.GetSolarPanelByIdQueryHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.SolarPanelCommands.UpdateCommands.UpdateSolarPanelCommandHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.WindTurbineCommands.CreateCommands.CreateWindTurbineCommandHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.WindTurbineCommands.UpdateCommands.UpdateWindTurbineCommandHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.WindTurbineCommands.GetQueries.GetWindTurbineByIdQueryHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Application.RenewAbleCommands.GetQueries.GetAllQueryHandlerTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Repositories.ProductionRepositoryTests&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::812FCF4F-EE72-411E-8F00-FD327AC83EA0::net8.0::EcoAssetHub.UnitTest.Infrastructure.Services.CacheServiceTests&lt;/TestId&gt;&#xD;
+  &lt;/TestAncestor&gt;&#xD;
+&lt;/SessionState&gt;</s:String>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=mongo/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

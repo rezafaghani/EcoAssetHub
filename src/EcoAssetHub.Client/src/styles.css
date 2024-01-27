@@ -1,0 +1,14 @@
+/* You can add global styles to this file, and also import other style files */
+/* Success snackbar styling */
+.success-snackbar {
+    color: #fff;
+    background-color: #4caf50;
+  }
+  
+  /* Error snackbar styling */
+  .error-snackbar {
+    color: #fff;
+    background-color: #f44336;
+  }
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }

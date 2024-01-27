@@ -1,0 +1,227 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.API\\EcoAssetHub.API.csproj": {}
+  },
+  "projects": {
+    "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.API\\EcoAssetHub.API.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+        "projectName": "EcoAssetHub.API",
+        "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+        "packagesPath": "C:\\Users\\reza faghani\\.nuget\\packages\\",
+        "outputPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.API\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\reza faghani\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\local-nuget": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://pkgs.dev.azure.com/3Shape/_packaging/ThreeShape-NuGet/nuget/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj": {
+                "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj"
+              },
+              "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj": {
+                "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "FluentValidation": {
+              "target": "Package",
+              "version": "[11.9.0, )"
+            },
+            "FluentValidation.AspNetCore": {
+              "target": "Package",
+              "version": "[11.3.0, )"
+            },
+            "MediatR": {
+              "target": "Package",
+              "version": "[12.2.0, )"
+            },
+            "Microsoft.VisualStudio.Azure.Containers.Tools.Targets": {
+              "target": "Package",
+              "version": "[1.19.6, )"
+            },
+            "Swashbuckle.AspNetCore": {
+              "target": "Package",
+              "version": "[6.5.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.101/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj",
+        "projectName": "EcoAssetHub.Domain",
+        "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj",
+        "packagesPath": "C:\\Users\\reza faghani\\.nuget\\packages\\",
+        "outputPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\reza faghani\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\local-nuget": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://pkgs.dev.azure.com/3Shape/_packaging/ThreeShape-NuGet/nuget/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "MongoDB.Driver": {
+              "target": "Package",
+              "version": "[2.23.1, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.101/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+        "projectName": "EcoAssetHub.Infrastructure",
+        "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+        "packagesPath": "C:\\Users\\reza faghani\\.nuget\\packages\\",
+        "outputPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Infrastructure\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\reza faghani\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\local-nuget": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://pkgs.dev.azure.com/3Shape/_packaging/ThreeShape-NuGet/nuget/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj": {
+                "projectPath": "C:\\reza-repo\\exprimental-projects\\EcoAssetHub\\src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.Extensions.Options": {
+              "target": "Package",
+              "version": "[8.0.1, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.101/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
