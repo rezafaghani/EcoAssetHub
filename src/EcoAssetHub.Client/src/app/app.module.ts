@@ -8,7 +8,7 @@ import { AddEditWindturbineComponent } from './add-edit-windturbine/add-edit-win
 import { HttpClientModule } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RenewAbleService } from './services/renewable.service';
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { BrowserAnimationsModule, NoopAnimationsModule } from '@angular/platform-browser/animations';
 @NgModule({
   declarations: [
     AppComponent,
@@ -23,7 +23,8 @@ import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
     FormsModule,
     ReactiveFormsModule,
     BrowserAnimationsModule,
-    
+    NoopAnimationsModule
+
   ],
   providers: [RenewAbleService],
   bootstrap: [AppComponent]

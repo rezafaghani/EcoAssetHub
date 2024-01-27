@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AddEditWindturbineComponent } from './add-edit-windturbine.component';
 import { RenewableAssetType, WindTurbine } from '../models/app-models';
 import { RenewAbleService } from '../services/renewable.service';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 
 class MockRenewAbleService {
@@ -17,7 +18,8 @@ describe('AddEditWindturbineComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [AddEditWindturbineComponent],
-      providers: [{ provide: RenewAbleService, useClass: MockRenewAbleService }]
+      providers: [{ provide: RenewAbleService, useClass: MockRenewAbleService }],
+      imports:[BrowserAnimationsModule]
     })
       .compileComponents();
   });

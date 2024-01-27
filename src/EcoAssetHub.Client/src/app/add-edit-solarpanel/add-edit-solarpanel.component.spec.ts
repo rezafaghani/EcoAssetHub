@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { AddEditSolarpanelComponent } from './add-edit-solarpanel.component';
 import { RenewableAssetType, SolarPanel } from '../models/app-models';
 import { RenewAbleService } from '../services/renewable.service';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 
 class MockRenewAbleService {
@@ -17,7 +18,8 @@ describe('AddEditSolarpanelComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [AddEditSolarpanelComponent],
-      providers: [{ provide: RenewAbleService, useClass: MockRenewAbleService }]
+      providers: [{ provide: RenewAbleService, useClass: MockRenewAbleService }],
+      imports:[BrowserAnimationsModule]
     })
     .compileComponents();
   });

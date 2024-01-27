@@ -4,11 +4,24 @@ import { RenewAbleService } from '../services/renewable.service';
 import { NotificationService } from '../services/notification.service';
 import { catchError, tap } from 'rxjs/operators';
 import { throwError } from 'rxjs';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 
 @Component({
   selector: 'app-add-edit-solarpanel',
   templateUrl: './add-edit-solarpanel.component.html',
-  styleUrl: './add-edit-solarpanel.component.css'
+  styleUrl: './add-edit-solarpanel.component.css',
+  animations: [
+    trigger('state', [
+      state('void', style({ opacity: 0 })),
+      state('*', style({ opacity: 1 })),
+      transition('void => *', [
+        animate('1s')
+      ]),
+      transition('* => void', [
+        animate('1s')
+      ])
+    ])
+  ]
 })
 export class AddEditSolarpanelComponent {
   renewableService: RenewAbleService = inject(RenewAbleService);
