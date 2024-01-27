@@ -8,13 +8,20 @@ import { AddEditWindturbineComponent } from './add-edit-windturbine/add-edit-win
 import { HttpClientModule } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RenewAbleService } from './services/renewable.service';
-import { BrowserAnimationsModule, NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { MatTableModule } from '@angular/material/table';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { ConfirmDialogComponent } from './confirm-dialog/confirm-dialog.component';
+import { MatDialogModule } from '@angular/material/dialog';
+import {MatFormFieldModule} from '@angular/material/form-field';
 @NgModule({
   declarations: [
     AppComponent,
     HomeComponent,
     AddEditSolarpanelComponent,
-    AddEditWindturbineComponent
+    AddEditWindturbineComponent,
+    ConfirmDialogComponent,
   ],
   imports: [
     BrowserModule,
@@ -23,10 +30,13 @@ import { BrowserAnimationsModule, NoopAnimationsModule } from '@angular/platform
     FormsModule,
     ReactiveFormsModule,
     BrowserAnimationsModule,
-    NoopAnimationsModule
-
+    MatTableModule,
+    MatButtonModule,
+    MatIconModule,
+    MatDialogModule,
+    MatFormFieldModule
   ],
   providers: [RenewAbleService],
-  bootstrap: [AppComponent]
+  bootstrap: [AppComponent],
 })
-export class AppModule { }
+export class AppModule {}

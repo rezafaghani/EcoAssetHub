@@ -1,96 +1,52 @@
-<button type="button" class="btn btn-primary m-2 float-end" data-bs-toggle="modal" data-bs-target="#SolarPanelModal"
-        (click)="addSolarPanelClick()">
+<button mat-raised-button color="primary" class="float-end" (click)="addSolarPanelClick()">
   Add Solar Panel
 </button>
-<button type="button" class="btn btn-primary m-2 float-end" data-bs-toggle="modal" data-bs-target="#WindTurbineModal"
-        (click)="addWindTurbineClick()">
-  Add wind Turbine
+<button mat-raised-button color="primary" class="float-end" (click)="addWindTurbineClick()">
+  Add Wind Turbine
 </button>
-<!-- Modal -->
-<div class="modal fade" id="WindTurbineModal" tabindex="-1" role="dialog" aria-labelledby="WindTurbineLabel"
-     aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-xl" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="WindTurbineLabel">{{ModalTitle}}</h5>
-        <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close" (click)="closeClick()">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <app-add-edit-windturbine [windTurbine]="windTurbine" *ngIf="ActivateAddEditWindturbin">
-        </app-add-edit-windturbine>
-      </div>
-    </div>
-  </div>
-</div>
-<div class="modal fade" id="SolarPanelModal" tabindex="-1" role="dialog" aria-labelledby="SolarPanelModalLabel"
-     aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-xl" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="SolarPanelModalLabel">{{ModalTitle}}</h5>
-        <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close" (click)="closeClick()">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <app-add-edit-solarpanel [solarpanel]="SolarPanel" *ngIf="ActivateAddEditSolar">
-        </app-add-edit-solarpanel>
-      </div>
-    </div>
-  </div>
-</div>
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th></th>
-      <th>MeterPoint Id</th>
-      <th>Capacity</th>
-      <th>Compass Orientation</th>
-      <th>Hub Height</th>
-      <th>Rotor Diameter</th>
-      <th>Type</th>
-      <th>Options</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr *ngFor="let dataItem of renewAbleList;index as i;">
-      <td>{{i+1}}</td>
-      <td>{{dataItem.meterPointId}}</td>
-      <td>{{dataItem.capacity}}</td>
-      <td>{{dataItem.compassOrientation}}</td>
-      <td>{{dataItem.hubHeight}}</td>
-      <td>{{dataItem.rotorDiameter}}</td>
-      <td>{{ dataItem.type === RenewableAssetType.SolarPanel ? 'SolarPanel' : (dataItem.type === RenewableAssetType.WindTurbine ? 'WindTurbine' : 'RenewableAsset') }}
-      </td>
-      <td>
-        <button type="button" *ngIf="dataItem.type== RenewableAssetType.SolarPanel" class="btn btn-light mr-1" data-bs-toggle="modal" data-bs-target="#SolarPanelModal"
-                (click)="editSolarPanelClick(dataItem)" data-backdrop="static" data-keyboard="false" title="editClick">
-          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-pencil-square" fill="currentColor"
-               xmlns="http://www.w3.org/2000/svg">
-            <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456l-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z" />
-            <path fill-rule="evenodd"
-                  d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z" />
-          </svg>
-        </button>
-        <button type="button" *ngIf="dataItem.type == RenewableAssetType.WindTurbine" class="btn btn-light mr-1" data-bs-toggle="modal" data-bs-target="#WindTurbineModal"
-                (click)="editWindTurbineClick(dataItem)" data-backdrop="static" data-keyboard="false" title="editClick">
-          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-pencil-square" fill="currentColor"
-               xmlns="http://www.w3.org/2000/svg">
-            <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456l-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z" />
-            <path fill-rule="evenodd"
-                  d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z" />
-          </svg>
-        </button>
-        <button type="button" class="btn btn-light mr-1" (click)="deleteClick(dataItem)" title="deleteClick">
-          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-trash-fill" fill="currentColor"
-               xmlns="http://www.w3.org/2000/svg">
-            <path fill-rule="evenodd"
-                  d="M2.5 1a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1H3v9a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4h.5a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H10a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1H2.5zm3 4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7a.5.5 0 0 1 .5-.5zM8 5a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0v-7A.5.5 0 0 1 8 5zm3 .5a.5.5 0 0 0-1 0v7a.5.5 0 0 0 1 0v-7z" />
-          </svg>
-        </button>
-      </td>
-    </tr>
-  </tbody>
-</table>
+<mat-table [dataSource]="renewAbleList" class="mat-elevation-z8">
+
+  <!-- Index Column -->
+  <ng-container matColumnDef="index">
+    <mat-header-cell *matHeaderCellDef> No. </mat-header-cell>
+    <mat-cell *matCellDef="let element; let i = index"> {{i + 1}} </mat-cell>
+  </ng-container>
+  <ng-container matColumnDef="meterPointId">
+    <mat-header-cell *matHeaderCellDef> MeterPoint Id </mat-header-cell>
+    <mat-cell *matCellDef="let element"> {{element.meterPointId}} </mat-cell>
+  </ng-container>
+  <ng-container matColumnDef="capacity">
+    <mat-header-cell *matHeaderCellDef> Capacity </mat-header-cell>
+    <mat-cell *matCellDef="let element"> {{element.capacity}} </mat-cell>
+  </ng-container>
+  <ng-container matColumnDef="compassOrientation">
+    <mat-header-cell *matHeaderCellDef> Compass Orientation </mat-header-cell>
+    <mat-cell *matCellDef="let element"> {{element.compassOrientation}} </mat-cell>
+  </ng-container>
+
+  <ng-container matColumnDef="hubHeight">
+    <mat-header-cell *matHeaderCellDef> Hub Height </mat-header-cell>
+    <mat-cell *matCellDef="let element"> {{element.hubHeight}} </mat-cell>
+  </ng-container>
+
+  <ng-container matColumnDef="type">
+    <mat-header-cell *matHeaderCellDef> Type </mat-header-cell>
+    <mat-cell *matCellDef="let element">{{ element.type === RenewableAssetType.SolarPanel ? 'SolarPanel' : (element.type === RenewableAssetType.WindTurbine ? 'WindTurbine' : 'RenewableAsset') }} </mat-cell>
+  </ng-container>
+  <!-- Actions Column -->
+  <ng-container matColumnDef="actions">
+    <mat-header-cell *matHeaderCellDef> Actions </mat-header-cell>
+    <mat-cell *matCellDef="let element">
+      <button mat-icon-button color="primary" (click)="openEditDialog(element)" title="Edit">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button mat-icon-button color="warn" (click)="openDeleteDialog(element.id)" title="Delete">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </mat-cell>
+  </ng-container>
+
+  <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+  <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+
+</mat-table>

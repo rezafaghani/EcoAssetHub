@@ -1,28 +1,26 @@
-<div class="d-flex flex-row bd-highlight mb-9">
-    <div class="p-2 w-100 bd-highlight">
-  <label>{{windTurbine.id}}</label>
-      <div class="input-group mb-12">
-        <span class="input-group-text">MeterPoint Id</span>
-        <input type="text" class="form-control" [(ngModel)]="meterPointId" title="MeterPoint Id">
-      </div>
-      <div class="input-group mb-12">
-        <span class="input-group-text">Hub Height</span>
-        <input type="text" class="form-control" [(ngModel)]="hubHeight" title="Hub Height">
-      </div>
-      <div class="input-group mb-12">
-        <span class="input-group-text">Rotor Diameter</span>
-        <input type="text" class="form-control" [(ngModel)]="rotorDiameter" title="Rotor Diameter">
-      </div>
-      <div class="input-group mb-12">
-        <span class="input-group-text">Capacity</span>
-        <input type="text" class="form-control" [(ngModel)]="capacity" title="Capacity">
-      </div>
-    </div>
-  </div>
-  <button (click)="addWindTurbine()" *ngIf="!windTurbine.id" class="btn btn-primary">
-    Add
-  </button>
-  
-  <button (click)="updateWindTurbine()" *ngIf="windTurbine.id" class="btn btn-primary">
-    Update
-  </button>
+<form [formGroup]="windForm" (ngSubmit)="onSubmit()">
+  <!-- MeterPoint Id Field -->
+  <mat-form-field appearance="fill">
+    <mat-label>MeterPoint Id</mat-label>
+    <input matInput formControlName="meterPointId">
+  </mat-form-field>
+
+  <!-- Hub Height Field -->
+  <mat-form-field appearance="fill">
+    <mat-label>Hub Height</mat-label>
+    <input matInput formControlName="hubHeight">
+  </mat-form-field>
+  <mat-form-field appearance="fill">
+    <mat-label>Rotor Diameter</mat-label>
+    <input matInput formControlName="rotorDiameter">
+  </mat-form-field>
+
+  <mat-form-field appearance="fill">
+    <mat-label>capacity</mat-label>
+    <input matInput formControlName="capacity">
+  </mat-form-field>
+
+  <!-- Add or Update Buttons -->
+  <button mat-button type="submit">{{  editData.id.length >  0 ? 'Update' : 'Add' }} Wind Turbine</button>
+  <button mat-button (click)="onCancel()">Cancel</button>
+</form>

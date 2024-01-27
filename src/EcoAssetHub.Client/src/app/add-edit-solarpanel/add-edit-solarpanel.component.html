@@ -1,24 +1,22 @@
-<div class="d-flex flex-row bd-highlight mb-9">
-    <div class="p-2 w-100 bd-highlight">
-  <label>{{solarpanel.id}}</label>
-      <div class="input-group mb-12">
-        <span class="input-group-text">MeterPoint Id</span>
-        <input type="text" class="form-control" [(ngModel)]="meterPointId" title="MeterPoint Id">
-      </div>
-      <div class="input-group mb-12">
-        <span class="input-group-text">Capacity</span>
-        <input type="text" class="form-control" [(ngModel)]="capacity" title="Hub Height">
-      </div>
-      <div class="input-group mb-12">
-        <span class="input-group-text">Compass Orientation</span>
-        <input type="text" class="form-control" [(ngModel)]="compassOrientation" title="Rotor Diameter">
-      </div>
-    </div>
-  </div>
-  <button (click)="addsolarpanel()" *ngIf="!solarpanel.id" class="btn btn-primary">
-    Add
-  </button>
-  
-  <button (click)="updatesolarpanel()" *ngIf="solarpanel.id" class="btn btn-primary">
-    Update
-  </button>
+<form [formGroup]="solarForm" (ngSubmit)="onSubmit()">
+  <mat-form-field>
+    <mat-label>Meter Point ID</mat-label>
+    <input matInput formControlName="meterPointId" />
+    <!-- Add error handling if needed -->
+  </mat-form-field>
+  <mat-form-field>
+    <mat-label>Capacity</mat-label>
+    <input matInput formControlName="capacity" />
+    <!-- Add error handling if needed -->
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Compass Orientation</mat-label>
+    <input matInput formControlName="compassOrientation" />
+    <!-- Add error handling if needed -->
+  </mat-form-field>
+  <!-- Other fields -->
+
+  <button mat-button type="submit">{{ editData.id.length >  0  ? 'Update' : 'Add' }} Solar Panel</button>
+  <button mat-button (click)="onCancel()">Cancel</button>
+</form>
