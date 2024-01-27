@@ -15,7 +15,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EcoAssetHub.API", "src\EcoA
 EndProject
 Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "EcoAssetHub.Client", "src\EcoAssetHub.Client\EcoAssetHub.Client.esproj", "{68877436-B693-4009-A128-D6930C9DEAD1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcoAssetHub.UnitTest", "tests\EcoAssetHub.API.UnitTest\EcoAssetHub.UnitTest.csproj", "{812FCF4F-EE72-411E-8F00-FD327AC83EA0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcoAssetHub.UnitTest", "tests\EcoAssetHub.UnitTest\EcoAssetHub.UnitTest.csproj", "{812FCF4F-EE72-411E-8F00-FD327AC83EA0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
