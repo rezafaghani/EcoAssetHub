@@ -1,0 +1,253 @@
+{
+  "settings": {
+    "components": {
+      "code": true,
+      "binaries": false
+    },
+    "targetId": "",
+    "targetDisplayName": ".NET 9.0"
+  },
+  "analysisStartTime": "2025-03-25T14:54:25.7257381Z",
+  "analysisEndTime": "2025-03-25T14:54:43.2820178Z",
+  "privacyModeHelpUrl": "https://go.microsoft.com/fwlink/?linkid=2270980",
+  "stats": {
+    "summary": {
+      "projects": 4,
+      "issues": 4,
+      "incidents": 7,
+      "effort": 7
+    },
+    "charts": {
+      "severity": {
+        "Mandatory": 6,
+        "Optional": 0,
+        "Potential": 1,
+        "Information": 0
+      },
+      "category": {
+        "Project": 4,
+        "NuGet": 2,
+        "Api": 1
+      }
+    }
+  },
+  "projects": [
+    {
+      "path": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+      "startingProject": true,
+      "issues": 3,
+      "storyPoints": 3,
+      "ruleInstances": [
+        {
+          "incidentId": "43baac6a-2a98-43ed-90e6-219a6547f5b5",
+          "ruleId": "NuGet.0001",
+          "projectPath": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.VisualStudio.Azure.Containers.Tools.Targets, 1.19.6\n\nRecommendation:\n\nNo supported version found",
+              "protected": "Microsoft.VisualStudio.Azure.Containers.Tools.Targets, 1.19.6\n\nRecommendation:\n\nNo supported version found"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+            "snippet": "Microsoft.VisualStudio.Azure.Containers.Tools.Targets, 1.19.6\n\nRecommendation:\n\nNo supported version found",
+            "protectedSnippet": "Microsoft.VisualStudio.Azure.Containers.Tools.Targets, 1.19.6\n\nRecommendation:\n\nNo supported version found",
+            "label": "Microsoft.VisualStudio.Azure.Containers.Tools.Targets 1.19.6"
+          }
+        },
+        {
+          "incidentId": "153f44bb-e296-4fff-8600-df4500264ae1",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current: net8.0\nNew: net9.0",
+              "protected": "Current: net8.0\nNew: net9.0"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+            "snippet": "Current: net8.0\nNew: net9.0",
+            "protectedSnippet": "Current: net8.0\nNew: net9.0"
+          }
+        },
+        {
+          "incidentId": "945fd8c4-109b-4527-803c-d002ca2a4526",
+          "ruleId": "Api.0001",
+          "projectPath": "src\\EcoAssetHub.API\\EcoAssetHub.API.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "services.AddMediatR(cfg =\u003E\r\n        {\r\n            cfg.RegisterServicesFromAssemblyContaining(typeof(Program));\r\n            cfg.AddOpenBehavior(typeof(LoggingBehavior\u003C,\u003E));\r\n            cfg.AddOpenBehavior(typeof(ValidatorBehavior\u003C,\u003E));\r\n        });",
+              "protected": "T:Microsoft.Extensions.DependencyInjection.ServiceCollectionExtensions"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.API\\Extensions\\Extensions.cs",
+            "snippet": "services.AddMediatR(cfg =\u003E\r\n        {\r\n            cfg.RegisterServicesFromAssemblyContaining(typeof(Program));\r\n            cfg.AddOpenBehavior(typeof(LoggingBehavior\u003C,\u003E));\r\n            cfg.AddOpenBehavior(typeof(ValidatorBehavior\u003C,\u003E));\r\n        });",
+            "protectedSnippet": "T:Microsoft.Extensions.DependencyInjection.ServiceCollectionExtensions",
+            "label": "T:Microsoft.Extensions.DependencyInjection.ServiceCollectionExtensions",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://learn.microsoft.com/dotnet/api/microsoft.extensions.dependencyinjection.servicecollectionextensions",
+                "isCustom": false
+              }
+            ],
+            "line": 19,
+            "column": 8
+          }
+        }
+      ]
+    },
+    {
+      "path": "src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj",
+      "startingProject": true,
+      "issues": 1,
+      "storyPoints": 1,
+      "ruleInstances": [
+        {
+          "incidentId": "e36b12bc-47ac-46b4-bd0e-ae6c62b0ea73",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current: net8.0\nNew: net9.0",
+              "protected": "Current: net8.0\nNew: net9.0"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.Domain\\EcoAssetHub.Domain.csproj",
+            "snippet": "Current: net8.0\nNew: net9.0",
+            "protectedSnippet": "Current: net8.0\nNew: net9.0"
+          }
+        }
+      ]
+    },
+    {
+      "path": "src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+      "startingProject": true,
+      "issues": 2,
+      "storyPoints": 2,
+      "ruleInstances": [
+        {
+          "incidentId": "bc5190f5-0045-4748-9cec-1ff2beaef0c8",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Options, 8.0.1\n\nRecommendation:\n\nMicrosoft.Extensions.Options 9.0.3",
+              "protected": "Microsoft.Extensions.Options, 8.0.1\n\nRecommendation:\n\nMicrosoft.Extensions.Options 9.0.3"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+            "snippet": "Microsoft.Extensions.Options, 8.0.1\n\nRecommendation:\n\nMicrosoft.Extensions.Options 9.0.3",
+            "protectedSnippet": "Microsoft.Extensions.Options, 8.0.1\n\nRecommendation:\n\nMicrosoft.Extensions.Options 9.0.3",
+            "label": "Microsoft.Extensions.Options 8.0.1"
+          }
+        },
+        {
+          "incidentId": "3b8f5dad-ff3f-41b0-b60b-02048f6bfce2",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current: net8.0\nNew: net9.0",
+              "protected": "Current: net8.0\nNew: net9.0"
+            },
+            "kind": "File",
+            "path": "src\\EcoAssetHub.Infrastructure\\EcoAssetHub.Infrastructure.csproj",
+            "snippet": "Current: net8.0\nNew: net9.0",
+            "protectedSnippet": "Current: net8.0\nNew: net9.0"
+          }
+        }
+      ]
+    },
+    {
+      "path": "tests\\EcoAssetHub.UnitTest\\EcoAssetHub.UnitTest.csproj",
+      "startingProject": true,
+      "issues": 1,
+      "storyPoints": 1,
+      "ruleInstances": [
+        {
+          "incidentId": "fbcfc442-70a6-466f-b803-d713707876d1",
+          "ruleId": "Project.0002",
+          "projectPath": "tests\\EcoAssetHub.UnitTest\\EcoAssetHub.UnitTest.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current: net8.0\nNew: net9.0",
+              "protected": "Current: net8.0\nNew: net9.0"
+            },
+            "kind": "File",
+            "path": "tests\\EcoAssetHub.UnitTest\\EcoAssetHub.UnitTest.csproj",
+            "snippet": "Current: net8.0\nNew: net9.0",
+            "protectedSnippet": "Current: net8.0\nNew: net9.0"
+          }
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Project.0002": {
+      "id": "Project.0002",
+      "description": "Project\u0027s target framework(s) needs to be changed to the new target framework that you selected for this upgrade.\n\nDuring upgrade target framework will be adjusted to corresponding platform when applicable. In some cases project would result in multiple target frameworks after the upgrade if it was using features that now have their own platforms in moderrn .NET frameworks (windows, iOS, Android etc).",
+      "label": "Project\u0027s target framework(s) needs to be changed",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Overview of porting from .NET Framework to .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265227",
+          "isCustom": false
+        },
+        {
+          "title": ".NET project SDKs",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265226",
+          "isCustom": false
+        }
+      ]
+    },
+    "NuGet.0002": {
+      "id": "NuGet.0002",
+      "description": "NuGet package upgrade is recommended for selected target framework.\n\nStandard .NET packages are recommended to have versions matching version of .NET that project targets.\n\nSome other packages also are known to work better for selected target frameworks.",
+      "label": "NuGet package upgrade is recommended",
+      "severity": "Potential",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262530",
+          "isCustom": false
+        }
+      ]
+    },
+    "NuGet.0001": {
+      "id": "NuGet.0001",
+      "description": "NuGet package is incompatible with selected target framework.\n\nPackage needs to be upgraded to a version supporting selected project target framework. If there no new package versions supporting new target framework, different package needs to be used and all code needs to be upgraded to new API.",
+      "label": "NuGet package is incompatible",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262529",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0001": {
+      "id": "Api.0001",
+      "description": "API does not exist in the selected version of .NET. See breaking changes documentation for alternative or replacement functionality.",
+      "label": "API does not exist",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Breaking changes in .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262679",
+          "isCustom": false
+        }
+      ]
+    }
+  }
+}
