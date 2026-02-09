@@ -40,8 +40,12 @@ internal static class Extensions
         builder.Services.AddScoped<EcoAssetHubContext>(sp =>
         {
             var configuration = sp.GetService<IConfiguration>();
-            var connectionString = configuration["DatabaseSettings:ConnectionString"];
-            var databaseName = configuration["DatabaseSettings:DatabaseName"];
+            if (configuration == null)
+            {
+                throw new InvalidOperationException("Configuration is not available.");
+            }
+            var connectionString = configuration["DatabaseSettings:ConnectionString"]??throw new InvalidOperationException("Connection string is not configured.");
+            var databaseName = configuration["DatabaseSettings:DatabaseName"]??throw new InvalidOperationException("Database name is not configured.");
             return new EcoAssetHubContext(connectionString, databaseName);
         });
         services.AddScoped<IRenewableAssetRepository, RenewableAssetRepository>();
