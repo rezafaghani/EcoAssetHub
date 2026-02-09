@@ -1,11 +1,16 @@
 import { RenewAbleService } from '../services/renewable.service';
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject } from '@angular/core';
 import { FormGroup, FormControl, Validators ,ReactiveFormsModule} from '@angular/forms';
-import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { WindTurbine } from '../models/app-models';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-add-edit-windturbine',
+  standalone:true,
+  imports:[ReactiveFormsModule,MatDialogModule,MatFormFieldModule,MatInputModule,MatButtonModule],
   templateUrl: './add-edit-windturbine.component.html',
   styleUrl: './add-edit-windturbine.component.css'
 })
@@ -26,12 +31,7 @@ export class AddEditWindturbineComponent {
     });
   }
 
-  ngOnInit(): void {
-    if (this.editData && this.editData) {
-      this.windForm.patchValue(this.editData);
-
-    }
-  }
+  // data injected; patch in ctor not needed
 
   onSubmit() {
     if (this.windForm.valid) {

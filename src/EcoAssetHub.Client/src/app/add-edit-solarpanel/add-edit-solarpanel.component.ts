@@ -1,15 +1,20 @@
-import { Component, Inject, OnInit } from '@angular/core';
-import { FormGroup, FormControl, Validators } from '@angular/forms';
-import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { Component, Inject } from '@angular/core';
+import { FormGroup, FormControl, Validators, ReactiveFormsModule } from '@angular/forms';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { RenewAbleService } from '../services/renewable.service';
 import { SolarPanel } from '../models/app-models';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-add-edit-solarpanel',
+  standalone: true,
+  imports:[ReactiveFormsModule,MatDialogModule,MatFormFieldModule,MatInputModule,MatButtonModule],
   templateUrl: './add-edit-solarpanel.component.html',
   // styleUrls: ['./add-edit-solarpanel.component.css']
 })
-export class AddEditSolarpanelComponent implements OnInit {
+export class AddEditSolarpanelComponent {
   solarForm: FormGroup;
   constructor(
     private renewableService: RenewAbleService,
@@ -25,12 +30,7 @@ export class AddEditSolarpanelComponent implements OnInit {
     });
   }
 
-  ngOnInit(): void {
-    // If editing, initialize form with existing data
-    if (this.editData && this.editData) {
-      this.solarForm.patchValue(this.editData);
-    }
-  }
+  // lifecycle hook not needed; data is available in ctor
 
   onSubmit() {
     if (this.solarForm.valid) {

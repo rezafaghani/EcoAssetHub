@@ -5,9 +5,16 @@ import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { AddEditSolarpanelComponent } from '../add-edit-solarpanel/add-edit-solarpanel.component';
 import { AddEditWindturbineComponent } from '../add-edit-windturbine/add-edit-windturbine.component';
+import { MatTableModule } from '@angular/material/table';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatDialogModule } from '@angular/material/dialog';
+
 
 @Component({
   selector: 'app-home',
+  standalone: true,
+  imports:[MatTableModule,MatButtonModule,MatIconModule,MatDialogModule],
   templateUrl: './home.component.html',
   styleUrl: './home.component.css',
 })
