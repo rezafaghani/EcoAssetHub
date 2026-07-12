@@ -1,0 +1,85 @@
+using EcoAssetHub.Domain.Interfaces;
+using EcoAssetHub.Insert.Services;
+using EcoAssetHub.Infrastructure;
+using EcoAssetHub.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Scalar.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(8080, listenOptions => listenOptions.Protocols = HttpProtocols.Http1);
+    options.ListenAnyIP(8081, listenOptions => listenOptions.Protocols = HttpProtocols.Http2);
+});
+
+builder.Services.AddControllers();
+builder.Services.AddGrpc();
+builder.Services.AddOpenApi();
+builder.Services.AddScoped<EcoAssetHubContext>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var connectionString = configuration["DatabaseSettings:ConnectionString"] ?? throw new InvalidOperationException("Connection string is not configured.");
+    var databaseName = configuration["DatabaseSettings:DatabaseName"] ?? throw new InvalidOperationException("Database name is not configured.");
+    return new EcoAssetHubContext(connectionString, databaseName);
+});
+builder.Services.AddScoped<IProductionRepository, ProductionRepository>();
+builder.Services.AddScoped<IDatasetRepository, DatasetRepository>();
+builder.Services.AddScoped<ITimeSeriesRepository, TimeSeriesRepository>();
+
+var authEnabled = builder.Configuration.GetValue("Auth:Enabled", false);
+if (authEnabled)
+{
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority = builder.Configuration["Auth:Authority"];
+            options.Audience = builder.Configuration["Auth:Audience"];
+            options.RequireHttpsMetadata = builder.Configuration.GetValue("Auth:RequireHttpsMetadata", true);
+        });
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy("IngestionWrite", policy =>
+        {
+            var scope = builder.Configuration["Auth:WriteScope"] ?? "ecoassethub.insert.write";
+            policy.RequireAuthenticatedUser();
+            policy.RequireAssertion(context =>
+                context.User.Claims.Any(claim =>
+                    claim.Type is "scope" or "scp" &&
+                    claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(scope)));
+        });
+    });
+}
+else
+{
+    builder.Services.AddAuthorization();
+}
+
+var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsureIndexesAsync();
+}
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+
+if (authEnabled)
+{
+    app.UseAuthentication();
+}
+
+app.UseAuthorization();
+app.MapControllers();
+var grpc = app.MapGrpcService<IngestionWriteGrpcService>();
+if (authEnabled)
+{
+    grpc.RequireAuthorization("IngestionWrite");
+}
+
+app.Run();

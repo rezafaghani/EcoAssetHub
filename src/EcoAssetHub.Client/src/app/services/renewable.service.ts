@@ -2,13 +2,13 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Renewable, SolarPanel, WindTurbine } from '../models/app-models';
+import { Curve, Renewable, SolarPanel, TimeSeriesPoint, WindTurbine } from '../models/app-models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class RenewAbleService {
-  public apiUrl = 'https://localhost:7115/api';
+  public apiUrl = '/api';
   //https://localhost:7115/api/Renewables
 
   constructor(private http: HttpClient) { }
@@ -56,6 +56,21 @@ export class RenewAbleService {
       headers: new HttpHeaders({ 'Content-Type': 'application/json' }),
       observe: 'response'
     });
+  }
+
+  searchCurves(search: string): Observable<Curve[]> {
+    return this.http.get<Curve[]>(this.apiUrl + '/curves', {
+      params: search ? { search } : {}
+    });
+  }
+
+  getCurveSeries(meterPointId: number, start: string, end: string, asOf?: string): Observable<TimeSeriesPoint[]> {
+    const params: Record<string, string> = { start, end };
+    if (asOf) {
+      params['asOf'] = asOf;
+    }
+
+    return this.http.get<TimeSeriesPoint[]>(this.apiUrl + '/curves/' + meterPointId + '/series', { params });
   }
 
 }

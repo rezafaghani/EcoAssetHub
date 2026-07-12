@@ -11,4 +11,6 @@ public class PowerProduction
 
     public DateTimeOffset ProductionDateTime { get; set; }
     public int Production { get; set; }
+    public DateTimeOffset AsOf { get; set; }
+    public DateTimeOffset InsertedAt { get; set; }
 }

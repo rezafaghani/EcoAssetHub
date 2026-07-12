@@ -1,146 +1,167 @@
-﻿using EcoAssetHub.Domain.Models;
+using EcoAssetHub.Domain.Models;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
 public class ProductionRepository(EcoAssetHubContext context) : IProductionRepository
 {
-
     public async Task<List<PowerProductPerDayDto>> SpotPricesDaily(PowerProductionFilter searchFilter)
     {
-        var filterBuilder = Builders<PowerProduction>.Filter;
-        FilterDefinition<PowerProduction> filter;
+        var points = await GetSeriesAsync(
+            searchFilter.MeterPointId,
+            searchFilter.StartDateTime,
+            searchFilter.EndDateTime,
+            null);
 
-        if (searchFilter.StartDateTime.Equals(searchFilter.EndDateTime))
-        {
-            // If the start and end dates are the same, use an equality filter
-            filter = filterBuilder.Eq("ProductionDateTime.0", searchFilter.StartDateTime.Ticks) &
-                     filterBuilder.Eq("MeterPointId", searchFilter.MeterPointId.ToString());
-        }
-        else
-        {
-            // If the start and end dates are different, use a range filter
-            filter = filterBuilder.Gte("ProductionDateTime.0", searchFilter.StartDateTime.Ticks) &
-                     filterBuilder.Lte("ProductionDateTime.0", searchFilter.EndDateTime.Ticks) &
-                     filterBuilder.Eq("MeterPointId", searchFilter.MeterPointId);
-        }
-
-
-
-        var interVaList = await context.PowerProductions.Find(filter).ToListAsync();
-        if (interVaList.Any())
-        {
-
-
-            var aggregatedData = interVaList
-                .GroupBy(x => x.ProductionDateTime.Date)
-                .Select(group => new PowerProductPerDayDto
-                {
-                    Start = group.Min(x => x.ProductionDateTime.DateTime),
-                    End = group.Max(x => x.ProductionDateTime.DateTime),
-                    Production = group.Sum(x => x.Production)
-                })
-                .ToList();
-            return aggregatedData;
-        }
-
-        return new List<PowerProductPerDayDto>();
+        return points
+            .GroupBy(x => x.Timestamp.Date)
+            .Select(group => new PowerProductPerDayDto
+            {
+                Start = group.Min(x => x.Timestamp.DateTime),
+                End = group.Max(x => x.Timestamp.DateTime),
+                Production = Convert.ToDecimal(group.Sum(x => x.Value ?? 0))
+            })
+            .ToList();
     }
 
     public async Task<List<PowerProductMonthlyDto>> SpotPriceMonthly(PowerProductionFilter searchFilter)
     {
-        var filterBuilder = Builders<PowerProduction>.Filter;
-        FilterDefinition<PowerProduction> filter;
+        var filter = Builders<PowerProduction>.Filter.Gte(x => x.ProductionDateTime, searchFilter.StartDateTime) &
+                     Builders<PowerProduction>.Filter.Lte(x => x.ProductionDateTime, searchFilter.EndDateTime);
 
-        if (searchFilter.StartDateTime.Equals(searchFilter.EndDateTime))
-        {
-            // If the start and end dates are the same, use an equality filter
-            filter = filterBuilder.Eq("ProductionDateTime.0", searchFilter.StartDateTime.Ticks);
-        }
-        else
-        {
-            // If the start and end dates are different, use a range filter
-            filter = filterBuilder.Gte("ProductionDateTime.0", searchFilter.StartDateTime.Ticks) &
-                     filterBuilder.Lte("ProductionDateTime.0", searchFilter.EndDateTime.Ticks);
-        }
-        var interVaList = await context.PowerProductions.Find(filter).ToListAsync();
-        if (interVaList.Any())
-        {
-            var monthlyAggregatedData = interVaList
-                .GroupBy(x => new { x.ProductionDateTime.Year, x.ProductionDateTime.Month, x.MeterPointId })
-                .Select(group => new PowerProductMonthlyDto
-                {
-                    Month = group.Key.Month,
-                    Production = group.Sum(x => x.Production),
-                    MeterPointId = group.Key.MeterPointId
-                })
-                .ToList();
-            return monthlyAggregatedData;
-        }
+        var productions = await context.PowerProductions.Find(filter).ToListAsync();
+        var latestVersions = ResolveLatestVersions(productions, null);
 
-        return new List<PowerProductMonthlyDto>();
+        return latestVersions
+            .GroupBy(x => new { x.ProductionDateTime.Year, x.ProductionDateTime.Month, x.MeterPointId })
+            .Select(group => new PowerProductMonthlyDto
+            {
+                Month = group.Key.Month,
+                Production = group.Sum(x => x.Production),
+                MeterPointId = group.Key.MeterPointId
+            })
+            .ToList();
     }
 
     public async Task<string> CreateAsync(PowerProduction input, CancellationToken cancellationToken = default)
     {
-        var existData =
-            await (await context.PowerProductions.FindAsync(
-                x => x.MeterPointId == input.MeterPointId && x.ProductionDateTime == input.ProductionDateTime,
-                cancellationToken: cancellationToken)).FirstOrDefaultAsync(cancellationToken);
-        if (existData != null)
-
+        var request = new TimeSeriesBatchRequest
         {
-            await context.PowerProductions.InsertOneAsync(input, cancellationToken: cancellationToken);
-            return input.Id; // Returns the inserted object id
-        }
+            MeterPointId = long.Parse(input.MeterPointId),
+            Points =
+            [
+                new TimeSeriesWritePoint
+                {
+                    Timestamp = input.ProductionDateTime,
+                    Value = input.Production
+                }
+            ]
+        };
 
-        return string.Empty;
+        var result = await InsertBatchAsync(request, cancellationToken);
+        return result.Inserted == 1 ? input.Id : string.Empty;
     }
 
     public async Task CreateListAsync(List<PowerProduction> input, CancellationToken cancellationToken = default)
     {
-        int successfulInserts = 0;
-        int failedInserts = 0;
-        int skippedInserts = 0;
-
-        foreach (var data in input)
+        foreach (var group in input.GroupBy(x => x.MeterPointId))
         {
+            if (!long.TryParse(group.Key, out var meterPointId))
+            {
+                continue;
+            }
 
-            try
+            await InsertBatchAsync(new TimeSeriesBatchRequest
             {
-                var filter = Builders<PowerProduction>.Filter.And(
-                    Builders<PowerProduction>.Filter.Eq("MeterPointId", data.MeterPointId),
-                    Builders<PowerProduction>.Filter.Eq("ProductionDateTime", data.ProductionDateTime));
-                var existingRecord = await context.PowerProductions.Find(filter).FirstOrDefaultAsync(cancellationToken: cancellationToken);
-                if (existingRecord == null)
+                MeterPointId = meterPointId,
+                Points = group.Select(x => new TimeSeriesWritePoint
                 {
-                    await context.PowerProductions.InsertOneAsync(data, cancellationToken: cancellationToken);
-                    successfulInserts++;
-                }
-                else
-                {
-                    skippedInserts++;
-                }
-
-            }
-            catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
-            {
-                // Log the duplicate key error and increment the failed inserts count
-                Console.WriteLine($"Duplicate entry for record {data.MeterPointId} at {data.ProductionDateTime}: {ex.Message}");
-                failedInserts++;
-            }
-            catch (Exception ex)
-            {
-                // Log other exceptions and increment the failed inserts count
-                Console.WriteLine($"Error during insert for record {data.MeterPointId} at {data.ProductionDateTime}: {ex.Message}");
-                failedInserts++;
-            }
+                    Timestamp = x.ProductionDateTime,
+                    Value = x.Production
+                }).ToList()
+            }, cancellationToken);
         }
-
-        Console.WriteLine($"Total successful inserts: {successfulInserts}");
-        Console.WriteLine($"Total failed inserts (due to duplicates or other errors): {failedInserts}");
-        Console.WriteLine($"Total skipped inserts (existing records): {skippedInserts}");
-
     }
 
-   
+    public async Task<TimeSeriesInsertResult> InsertBatchAsync(TimeSeriesBatchRequest request, CancellationToken cancellationToken = default)
+    {
+        var insertTime = DateTimeOffset.UtcNow;
+        var result = new TimeSeriesInsertResult { AsOf = insertTime };
+
+        foreach (var point in request.Points.OrderBy(x => x.Timestamp))
+        {
+            var meterPointId = request.MeterPointId.ToString();
+            var existingVersions = await context.PowerProductions
+                .Find(x => x.MeterPointId == meterPointId && x.ProductionDateTime == point.Timestamp)
+                .ToListAsync(cancellationToken);
+
+            var latest = existingVersions
+                .OrderByDescending(x => x.AsOf)
+                .ThenByDescending(x => x.InsertedAt)
+                .FirstOrDefault();
+
+            if (latest?.Production == point.Value)
+            {
+                result.Skipped++;
+                continue;
+            }
+
+            await context.PowerProductions.InsertOneAsync(new PowerProduction
+            {
+                MeterPointId = meterPointId,
+                ProductionDateTime = point.Timestamp,
+                Production = Convert.ToInt32(point.Value ?? 0),
+                AsOf = insertTime,
+                InsertedAt = insertTime
+            }, cancellationToken: cancellationToken);
+
+            result.Inserted++;
+        }
+
+        return result;
+    }
+
+    public async Task<List<TimeSeriesPointDto>> GetSeriesAsync(
+        long meterPointId,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        DateTimeOffset? asOf,
+        CancellationToken cancellationToken = default)
+    {
+        var meterPoint = meterPointId.ToString();
+        var filter = Builders<PowerProduction>.Filter.Eq(x => x.MeterPointId, meterPoint) &
+                     Builders<PowerProduction>.Filter.Gte(x => x.ProductionDateTime, start) &
+                     Builders<PowerProduction>.Filter.Lte(x => x.ProductionDateTime, end);
+
+        if (asOf.HasValue)
+        {
+            filter &= Builders<PowerProduction>.Filter.Lte(x => x.AsOf, asOf.Value);
+        }
+
+        var productions = await context.PowerProductions.Find(filter).ToListAsync(cancellationToken);
+
+        return ResolveLatestVersions(productions, asOf)
+            .OrderBy(x => x.ProductionDateTime)
+            .Select(x => new TimeSeriesPointDto
+            {
+                Timestamp = x.ProductionDateTime,
+                Value = x.Production,
+                AsOf = x.AsOf
+            })
+            .ToList();
+    }
+
+    private static List<PowerProduction> ResolveLatestVersions(List<PowerProduction> productions, DateTimeOffset? asOf)
+    {
+        var filtered = asOf.HasValue
+            ? productions.Where(x => x.AsOf <= asOf.Value)
+            : productions;
+
+        return filtered
+            .GroupBy(x => new { x.MeterPointId, x.ProductionDateTime })
+            .Select(group => group
+                .OrderByDescending(x => x.AsOf)
+                .ThenByDescending(x => x.InsertedAt)
+                .First())
+            .ToList();
+    }
 }

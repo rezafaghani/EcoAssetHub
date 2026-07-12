@@ -1,0 +1,129 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.API/Dockerfile
+    environment:
+      DatabaseSettings__ConnectionString: mongodb://mongo:27017
+      DatabaseSettings__DatabaseName: centrica
+    ports:
+      - "5100:8080"
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  insert:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Insert/Dockerfile
+    environment:
+      DatabaseSettings__ConnectionString: mongodb://mongo:27017
+      DatabaseSettings__DatabaseName: centrica
+    ports:
+      - "5101:8080"
+      - "5103:8081"
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  query:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Query/Dockerfile
+    environment:
+      DatabaseSettings__ConnectionString: mongodb://mongo:27017
+      DatabaseSettings__DatabaseName: centrica
+    ports:
+      - "5102:8080"
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Scheduler/Dockerfile
+    environment:
+      DatabaseSettings__ConnectionString: mongodb://mongo:27017
+      DatabaseSettings__DatabaseName: centrica
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__UserName: guest
+      RabbitMq__Password: guest
+      RabbitMq__QueueName: ecoassethub.ingestion.jobs
+      Scheduler__PollingSeconds: 10
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Ingestion/Dockerfile
+    environment:
+      DatabaseSettings__ConnectionString: mongodb://mongo:27017
+      DatabaseSettings__DatabaseName: centrica
+      InsertApi__GrpcUrl: http://insert:8081
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__UserName: guest
+      RabbitMq__Password: guest
+      RabbitMq__QueueName: ecoassethub.ingestion.jobs
+      Ingestion__LookbackHours: 48
+      Ingestion__BatchSize: 500
+      Ingestion__MinRequestIntervalSeconds: 3
+      Ingestion__MaxEnergyChartsRetries: 3
+      Ingestion__RetryBaseDelaySeconds: 10
+    restart: unless-stopped
+    depends_on:
+      insert:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Client/Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      query:
+        condition: service_started
+
+volumes:
+  mongo-data:

@@ -1,0 +1,175 @@
+.page-shell {
+  min-height: 100vh;
+  background: #f6f8fa;
+  color: #1f2933;
+  padding: 24px;
+}
+
+.toolbar {
+  align-items: end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin: 0 auto 20px;
+  max-width: 1180px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.toolbar p {
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.search-row,
+.filters {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.search-row mat-form-field {
+  width: 280px;
+}
+
+.content-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 260px 1fr;
+  margin: 0 auto;
+  max-width: 1180px;
+}
+
+.curve-list,
+.workspace {
+  background: #ffffff;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.curve-list {
+  min-height: 420px;
+}
+
+.curve-item {
+  background: #ffffff;
+  border: 1px solid #d8e0e8;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  margin-top: 10px;
+  padding: 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.curve-item.active {
+  border-color: #0f766e;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.curve-item span,
+.curve-item small {
+  display: block;
+}
+
+.curve-item small,
+.empty,
+.panel-header span {
+  color: #64748b;
+}
+
+.filters {
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.filters mat-form-field {
+  width: 210px;
+}
+
+.error {
+  color: #b42318;
+  margin-bottom: 12px;
+}
+
+.chart-panel {
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 14px;
+}
+
+.panel-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+svg line {
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+svg path {
+  fill: none;
+  stroke: #0f766e;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+svg circle {
+  fill: #0f766e;
+}
+
+svg text {
+  fill: #64748b;
+  font-size: 14px;
+}
+
+.data-table {
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+@media (max-width: 860px) {
+  .toolbar,
+  .search-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-row mat-form-field,
+  .filters mat-form-field {
+    width: 100%;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}

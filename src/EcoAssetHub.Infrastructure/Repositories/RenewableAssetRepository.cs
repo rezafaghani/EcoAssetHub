@@ -1,4 +1,5 @@
 ﻿using EcoAssetHub.Domain.Models;
+using MongoDB.Bson;
 using System.Data;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
@@ -82,5 +83,33 @@ public class RenewableAssetRepository(EcoAssetHubContext context) : IRenewableAs
     {
         var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, id);
         return await context.RenewableAssets.Find(filter).FirstOrDefaultAsync();
+    }
+
+    public async Task<List<CurveDto>> SearchCurvesAsync(string? search, CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<RenewableAsset>.Filter.Empty;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var trimmed = search.Trim();
+            filter = Builders<RenewableAsset>.Filter.Regex(x => x.Name, new BsonRegularExpression(trimmed, "i"));
+            if (long.TryParse(trimmed, out var meterPointId))
+            {
+                filter |= Builders<RenewableAsset>.Filter.Eq(x => x.MeterPointId, meterPointId);
+            }
+        }
+
+        var documents = await context.RenewableAssets
+            .Find(filter)
+            .Limit(25)
+            .ToListAsync(cancellationToken);
+
+        return documents.Select(x => new CurveDto
+        {
+            Id = x.Id,
+            Name = string.IsNullOrWhiteSpace(x.Name) ? x.MeterPointId.ToString() : x.Name,
+            MeterPointId = x.MeterPointId,
+            Capacity = x.Capacity,
+            Type = x.Type
+        }).ToList();
     }
 }

@@ -1,5 +1,5 @@
-using EcoAssetHub.API.Workers;
 using FluentValidation.AspNetCore;
+using Scalar.AspNetCore;
 var  myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,9 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddFluentValidationAutoValidation();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 builder.AddApplicationServices();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -26,9 +24,6 @@ builder.Services.AddCors(options =>
         });
 });
 builder.Services.AddControllers();
-builder.Services.AddHostedService<MeterDataImporterWorker>();
-builder.Services.AddHostedService<CreateProductionPriceWorker>();
-
 var app = builder.Build();
 
 // Perform database initialization
@@ -37,8 +32,8 @@ await DatabaseInitializer.InitializeAsync(app.Services);
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();

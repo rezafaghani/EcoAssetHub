@@ -9,6 +9,7 @@ public class RenewableAsset
     public string Id { get; private set; }
 
     public RenewableAssetType Type { get; private set; } // WindTurbine, SolarPanel, etc.
+    public string Name { get; set; } = string.Empty;
 
     private decimal _capacity;
 
@@ -42,5 +43,6 @@ public class RenewableAsset
         Type = type;
         Capacity = capacity;
         MeterPointId = meterPointId;
+        Name = meterPointId.ToString();
     }
 }

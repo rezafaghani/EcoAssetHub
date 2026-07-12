@@ -1,52 +1,91 @@
-<button mat-raised-button color="primary" class="float-end" (click)="addSolarPanelClick()">
-  Add Solar Panel
-</button>
-<button mat-raised-button color="primary" class="float-end" (click)="addWindTurbineClick()">
-  Add Wind Turbine
-</button>
-<mat-table [dataSource]="renewAbleList" class="mat-elevation-z8">
-
-  <!-- Index Column -->
-  <ng-container matColumnDef="index">
-    <mat-header-cell *matHeaderCellDef> No. </mat-header-cell>
-    <mat-cell *matCellDef="let element; let i = index"> {{i + 1}} </mat-cell>
-  </ng-container>
-  <ng-container matColumnDef="meterPointId">
-    <mat-header-cell *matHeaderCellDef> MeterPoint Id </mat-header-cell>
-    <mat-cell *matCellDef="let element"> {{element.meterPointId}} </mat-cell>
-  </ng-container>
-  <ng-container matColumnDef="capacity">
-    <mat-header-cell *matHeaderCellDef> Capacity </mat-header-cell>
-    <mat-cell *matCellDef="let element"> {{element.capacity}} </mat-cell>
-  </ng-container>
-  <ng-container matColumnDef="compassOrientation">
-    <mat-header-cell *matHeaderCellDef> Compass Orientation </mat-header-cell>
-    <mat-cell *matCellDef="let element"> {{element.compassOrientation}} </mat-cell>
-  </ng-container>
-
-  <ng-container matColumnDef="hubHeight">
-    <mat-header-cell *matHeaderCellDef> Hub Height </mat-header-cell>
-    <mat-cell *matCellDef="let element"> {{element.hubHeight}} </mat-cell>
-  </ng-container>
-
-  <ng-container matColumnDef="type">
-    <mat-header-cell *matHeaderCellDef> Type </mat-header-cell>
-    <mat-cell *matCellDef="let element">{{ element.type === RenewableAssetType.SolarPanel ? 'SolarPanel' : (element.type === RenewableAssetType.WindTurbine ? 'WindTurbine' : 'RenewableAsset') }} </mat-cell>
-  </ng-container>
-  <!-- Actions Column -->
-  <ng-container matColumnDef="actions">
-    <mat-header-cell *matHeaderCellDef> Actions </mat-header-cell>
-    <mat-cell *matCellDef="let element">
-      <button mat-icon-button color="primary" (click)="openEditDialog(element)" title="Edit">
-        <mat-icon>edit</mat-icon>
+<main class="page-shell">
+  <section class="toolbar">
+    <div>
+      <h1>Curve Explorer</h1>
+      <p>Search a curve by meter point id or name, then inspect versioned production data.</p>
+    </div>
+    <div class="search-row">
+      <mat-form-field appearance="outline">
+        <mat-label>Curve id or name</mat-label>
+        <input matInput [(ngModel)]="searchText" (keyup.enter)="searchCurves()">
+      </mat-form-field>
+      <button mat-flat-button color="primary" (click)="searchCurves()">
+        <mat-icon>search</mat-icon>
+        Search
       </button>
-      <button mat-icon-button color="warn" (click)="openDeleteDialog(element.id)" title="Delete">
-        <mat-icon>delete</mat-icon>
+    </div>
+  </section>
+
+  <section class="content-grid">
+    <aside class="curve-list">
+      <h2>Curves</h2>
+      <button
+        class="curve-item"
+        type="button"
+        *ngFor="let curve of curves"
+        [class.active]="selectedCurve?.meterPointId === curve.meterPointId"
+        (click)="selectCurve(curve)">
+        <span>{{ curve.name || curve.meterPointId }}</span>
+        <small>{{ curve.meterPointId }}</small>
       </button>
-    </mat-cell>
-  </ng-container>
+      <p class="empty" *ngIf="curves.length === 0">No curves loaded.</p>
+    </aside>
 
-  <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-  <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+    <section class="workspace">
+      <div class="filters">
+        <mat-form-field appearance="outline">
+          <mat-label>Start</mat-label>
+          <input matInput type="datetime-local" [(ngModel)]="start">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>End</mat-label>
+          <input matInput type="datetime-local" [(ngModel)]="end">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>As of insert time</mat-label>
+          <input matInput type="datetime-local" [(ngModel)]="asOf">
+        </mat-form-field>
+        <button mat-flat-button color="primary" (click)="loadSeries()" [disabled]="!selectedCurve || isLoading">
+          <mat-icon>timeline</mat-icon>
+          Load
+        </button>
+      </div>
 
-</mat-table>
+      <p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <div class="chart-panel">
+        <div class="panel-header">
+          <h2>{{ selectedCurve ? selectedCurve.name || selectedCurve.meterPointId : 'Select a curve' }}</h2>
+          <span>{{ series.length }} points</span>
+        </div>
+        <svg viewBox="0 0 760 260" role="img" aria-label="Production time series chart">
+          <line x1="28" y1="232" x2="732" y2="232"></line>
+          <line x1="28" y1="28" x2="28" y2="232"></line>
+          <path *ngIf="chartPath" [attr.d]="chartPath"></path>
+          <circle *ngFor="let point of chartPoints" [attr.cx]="point.x" [attr.cy]="point.y" r="4">
+            <title>{{ point.label }}: {{ point.value }}</title>
+          </circle>
+          <text *ngIf="series.length === 0" x="380" y="130" text-anchor="middle">No data for the selected range</text>
+        </svg>
+      </div>
+
+      <mat-table [dataSource]="series" class="data-table">
+        <ng-container matColumnDef="timestamp">
+          <mat-header-cell *matHeaderCellDef>Timestamp</mat-header-cell>
+          <mat-cell *matCellDef="let point">{{ point.timestamp | date:'medium' }}</mat-cell>
+        </ng-container>
+        <ng-container matColumnDef="value">
+          <mat-header-cell *matHeaderCellDef>Value</mat-header-cell>
+          <mat-cell *matCellDef="let point">{{ point.value }}</mat-cell>
+        </ng-container>
+        <ng-container matColumnDef="asOf">
+          <mat-header-cell *matHeaderCellDef>As of</mat-header-cell>
+          <mat-cell *matCellDef="let point">{{ point.asOf | date:'medium' }}</mat-cell>
+        </ng-container>
+
+        <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+        <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+      </mat-table>
+    </section>
+  </section>
+</main>

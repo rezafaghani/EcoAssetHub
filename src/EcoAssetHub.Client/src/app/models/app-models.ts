@@ -29,3 +29,17 @@ export enum RenewableAssetType {
     meterPointId: number;
     compassOrientation: string;
   }
+
+export interface Curve {
+  id: string;
+  name: string;
+  meterPointId: number;
+  capacity: number;
+  type: RenewableAssetType;
+}
+
+export interface TimeSeriesPoint {
+  timestamp: string;
+  value: number;
+  asOf: string;
+}

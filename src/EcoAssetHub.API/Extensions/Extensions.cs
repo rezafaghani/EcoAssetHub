@@ -52,8 +52,6 @@ internal static class Extensions
         services.AddScoped<IWindTurbineRepository, WindTurbineRepository>();
         services.AddScoped<ISolarPanelRepository, SolarPanelRepository>();
         services.AddScoped<IProductionRepository, ProductionRepository>();
-        services.AddScoped<ProductionFileReader, CsvFileReader>();
-        services.AddScoped<IPowerProductionService, PowerProductionService>();
         services.AddSingleton<ICacheService, CacheService>();
         services.AddMemoryCache();
     }
