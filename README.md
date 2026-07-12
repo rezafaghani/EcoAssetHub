@@ -1,30 +1,45 @@
 # EcoAssetHub
 
 ## Overview
-This project focuses on managing renewable energy assets for training purposes. It supports asset management, meter data processing, and settlement calculations.
+EcoAssetHub is a renewable-energy data platform built around a .NET backend and a React/Vite client. The current UI focuses on dataset exploration, Energy Charts time-series inspection, and ingestion status monitoring.
 
 ## Features
-- **Asset Management:** Handle renewable assets like wind turbines and solar panels.
-- **Meter Data Processing:** Process meter data and link it to assets.
-- **Settlement Calculation:** Compute settlements based on production and spot prices.
+- **Dataset explorer:** Search datasets by endpoint, metric, or identifier.
+- **Time-series viewer:** Inspect charted production and forecast data.
+- **Ingestion monitoring:** Review schedules, jobs, and executions.
 
 ## Technologies Used
-- Frontend: Angular 17
-- Backend: .NET Core 8
-- MediatR for CQRS pattern implementation
-- Database: In-Memory Database for testing, MongoDB for persistent data storage
-- Testing: xUnit
+- Backend: .NET 8
+- Frontend: React 19 + Vite
+- Data access: MongoDB
+- Testing: xUnit, Vitest
 
 ## Setup and Installation
-1. Install MongoDB.
-2. Install .NET Core 8 SDK.
-3. Install Angular 17 CLI.
+1. Install the .NET 8 SDK.
+2. Install Node.js 20+.
+3. Install MongoDB if you want to run the API against a local instance.
 
 ## Usage
-Primarily intended for training purposes.
+Backend:
+```bash
+dotnet restore EcoAssetHub.sln
+dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj
+```
+
+Client:
+```bash
+cd src/EcoAssetHub.Client
+npm install
+npm start
+```
 
 ## Development and Contribution
-Contributors are welcome to enhance functionalities, adhering to coding standards and testing protocols.
+Run the relevant build or test command before submitting changes:
+
+- `dotnet build EcoAssetHub.sln`
+- `dotnet test EcoAssetHub.sln`
+- `cd src/EcoAssetHub.Client && npm run build`
+- `cd src/EcoAssetHub.Client && npm test`
 
 ## License
 This project is licensed under the MIT License.
