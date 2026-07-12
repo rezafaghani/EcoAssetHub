@@ -58,6 +58,7 @@ public class EcoAssetHubContext
         await EnergyDatasets.Indexes.CreateOneAsync(
             new CreateIndexModel<EnergyDataset>(
                 Builders<EnergyDataset>.IndexKeys
+                    .Ascending(x => x.CurveId)
                     .Ascending(x => x.Source)
                     .Ascending(x => x.Endpoint)
                     .Ascending(x => x.Metric)
@@ -84,6 +85,7 @@ public class EcoAssetHubContext
         await IngestionJobs.Indexes.CreateOneAsync(
             new CreateIndexModel<IngestionJob>(
                 Builders<IngestionJob>.IndexKeys
+                    .Ascending(x => x.CurveId)
                     .Ascending(x => x.ScheduleId)
                     .Descending(x => x.QueuedAt)),
             cancellationToken: cancellationToken);
@@ -91,6 +93,7 @@ public class EcoAssetHubContext
         await IngestionExecutions.Indexes.CreateOneAsync(
             new CreateIndexModel<IngestionExecution>(
                 Builders<IngestionExecution>.IndexKeys
+                    .Ascending(x => x.CurveId)
                     .Ascending(x => x.JobId)
                     .Descending(x => x.CreatedAt)),
             cancellationToken: cancellationToken);

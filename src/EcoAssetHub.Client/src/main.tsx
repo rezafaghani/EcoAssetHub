@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { getDatasetCurveId, groupDatasetsByCurve } from './curves';
 import './styles.css';
 
 interface DatasetMetadata {
   id: string;
+  curveId: string;
   source: string;
   endpoint: string;
   metric: string;
@@ -73,18 +75,26 @@ interface ChartPoint {
   point: TimeSeriesPoint;
 }
 
+interface ChartTick {
+  x: number;
+  label: string;
+  anchor: 'start' | 'middle' | 'end';
+}
+
 const chartBounds = {
   left: 72,
   right: 872,
   top: 28,
-  bottom: 286
+  bottom: 318
 };
+const chartViewBox = { width: 900, height: 380 };
+const chartHorizontalPadding = 18;
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const refreshIntervalMs = 15_000;
-const forecastDatasetId = 'energy-charts:public_power_forecast:forecast:dk:-:-:wind_offshore:day-ahead:-:quarter-hour';
 
 function App() {
   const [datasets, setDatasets] = useState<DatasetMetadata[]>([]);
+  const [selectedCurveId, setSelectedCurveId] = useState('');
   const [selected, setSelected] = useState<DatasetMetadata | null>(null);
   const [series, setSeries] = useState<TimeSeriesPoint[]>([]);
   const [schedules, setSchedules] = useState<IngestionSchedule[]>([]);
@@ -104,14 +114,15 @@ function App() {
 
   useEffect(() => {
     void loadDatasets();
-    void loadIngestionStatus();
   }, []);
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
   const metrics = useMemo(() => unique(datasets.map(x => x.metric)), [datasets]);
+  const curves = useMemo(() => groupDatasetsByCurve(datasets), [datasets]);
+  const selectedCurve = curves.find(curve => curve.id === selectedCurveId);
+  const selectedCurveDatasets = (selectedCurve?.datasets ?? []) as DatasetMetadata[];
   const chartData = useMemo(() => buildChartData(series, selected?.unit ?? ''), [series, selected?.unit]);
   const latestExecution = executions[0];
-  const forecastFocused = selected?.id === forecastDatasetId;
 
   useEffect(() => {
     setHoveredPoint(null);
@@ -122,7 +133,9 @@ function App() {
 
     const id = window.setInterval(() => {
       void loadDatasets(true);
-      void loadIngestionStatus(true);
+      if (selectedCurveId) {
+        void loadIngestionStatus(selectedCurveId, true);
+      }
       if (selected) {
         void loadSeries(selected, true);
       }
@@ -130,7 +143,7 @@ function App() {
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
-  }, [live, selected, start, end, asOf, search, endpoint, metric]);
+  }, [live, selected, selectedCurveId, start, end, asOf, search, endpoint, metric]);
 
   async function loadDatasets(silent = false) {
     if (!silent) setLoading(true);
@@ -143,11 +156,21 @@ function App() {
       const response = await fetch(`${apiBase}/datasets?${params}`);
       if (!response.ok) throw new Error('Dataset request failed');
       const result = await response.json() as DatasetMetadata[];
+      const resultCurves = groupDatasetsByCurve(result);
+      const nextCurveId = selectedCurveId && resultCurves.some(curve => curve.id === selectedCurveId)
+        ? selectedCurveId
+        : resultCurves[0]?.id ?? '';
+      const nextCurveDatasets = result.filter(dataset => getDatasetCurveId(dataset) === nextCurveId);
+      const nextSelected = nextCurveDatasets.find(dataset => dataset.id === selected?.id) ?? nextCurveDatasets[0] ?? null;
+
       setDatasets(result);
-      if (!selected && result.length > 0) {
-        setSelected(result[0]);
-      } else if (selected) {
-        setSelected(result.find(dataset => dataset.id === selected.id) ?? selected);
+      setSelectedCurveId(nextCurveId);
+      setSelected(nextSelected);
+      if (nextSelected?.id !== selected?.id) {
+        setSeries([]);
+      }
+      if (nextCurveId) {
+        void loadIngestionStatus(nextCurveId, silent);
       }
     } catch {
       setError('Unable to load datasets.');
@@ -176,13 +199,21 @@ function App() {
     }
   }
 
-  async function loadIngestionStatus(silent = false) {
+  async function loadIngestionStatus(curveId = selectedCurveId, silent = false) {
+    if (!curveId) {
+      setSchedules([]);
+      setJobs([]);
+      setExecutions([]);
+      return;
+    }
+
     if (!silent) setError('');
     try {
+      const encoded = encodeURIComponent(curveId);
       const [scheduleResponse, jobResponse, executionResponse] = await Promise.all([
-        fetch(`${apiBase}/ingestion/schedules`),
-        fetch(`${apiBase}/ingestion/jobs`),
-        fetch(`${apiBase}/ingestion/executions`)
+        fetch(`${apiBase}/ingestion/curves/${encoded}/schedules`),
+        fetch(`${apiBase}/ingestion/curves/${encoded}/jobs`),
+        fetch(`${apiBase}/ingestion/curves/${encoded}/executions`)
       ]);
       if (!scheduleResponse.ok || !jobResponse.ok || !executionResponse.ok) {
         throw new Error('Ingestion status request failed');
@@ -192,6 +223,18 @@ function App() {
       setExecutions(await executionResponse.json() as IngestionExecution[]);
     } catch {
       if (!silent) setError('Unable to load ingestion status.');
+    }
+  }
+
+  function selectCurve(curveId: string) {
+    const curveDatasets = datasets.filter(dataset => getDatasetCurveId(dataset) === curveId);
+    const nextSelected = curveDatasets[0] ?? null;
+    setSelectedCurveId(curveId);
+    setSelected(nextSelected);
+    setSeries([]);
+    void loadIngestionStatus(curveId);
+    if (nextSelected) {
+      void loadSeries(nextSelected);
     }
   }
 
@@ -223,27 +266,47 @@ function App() {
           </label>
           <button onClick={() => void loadDatasets()}>Search</button>
         </div>
+        <div className="sidebar-heading">Curves</div>
         <div className="dataset-list">
-          {datasets.map(dataset => (
+          {curves.map(curve => (
             <button
-              key={dataset.id}
-              className={selected?.id === dataset.id ? 'dataset active' : 'dataset'}
-              onClick={() => {
-                setSelected(dataset);
-                void loadSeries(dataset);
-              }}>
-              <span>{dataset.metric}</span>
-              <small>{dataset.endpoint} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
+              key={curve.id}
+              className={selectedCurveId === curve.id ? 'dataset active' : 'dataset'}
+              onClick={() => selectCurve(curve.id)}>
+              <span>{curve.label}</span>
+              <small>{curve.datasets.length} datasets · {curve.lastIngestedAt ? formatDate(curve.lastIngestedAt) : 'not ingested'}</small>
             </button>
           ))}
         </div>
+
+        {selectedCurveId && (
+          <>
+            <div className="sidebar-heading">Datasets</div>
+            <div className="dataset-list">
+              {selectedCurveDatasets.map(dataset => (
+                <button
+                  key={dataset.id}
+                  className={selected?.id === dataset.id ? 'dataset active' : 'dataset'}
+                  onClick={() => {
+                    setSelected(dataset);
+                    void loadSeries(dataset);
+                  }}>
+                  <span>{dataset.metric}</span>
+                  <small>{dataset.endpoint} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!curves.length && <p className="empty-state">No curves found.</p>}
       </aside>
 
       <section className="workspace">
         <section className="control-panel">
-          <div className={forecastFocused ? 'title-block forecast-focus' : 'title-block'}>
-            <h1>{selected?.metric ?? 'Dataset explorer'}</h1>
-            <p title={selected?.id}>{selected ? selected.id : 'Select a dataset to inspect metadata and time-series values.'}</p>
+          <div className="title-block">
+            <h1>{selectedCurveId || 'Curve explorer'}</h1>
+            <p title={selected?.id}>{selected ? `${selected.metric} · ${selected.id}` : 'Select a curve to inspect details, schedules, jobs, and executions.'}</p>
           </div>
 
           <div className="range-toolbar">
@@ -260,22 +323,28 @@ function App() {
 
         {error && <div className="error">{error}</div>}
 
+        <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} />
+
+        <IngestionStatusPanel curveId={selectedCurveId} schedules={schedules} jobs={jobs} executions={executions} latestExecution={latestExecution} />
+
         <section className="chart-zone">
-          <svg viewBox="0 0 900 340" role="img" aria-label="Dataset time series">
+          <svg viewBox={`0 0 ${chartViewBox.width} ${chartViewBox.height}`} role="img" aria-label="Dataset time series">
+            {selected?.unit && <text className="chart-y-title" x={chartBounds.left} y={chartBounds.top - 12}>{selected.unit}</text>}
             {chartData.yTicks.map(tick => (
               <g className="chart-grid" key={`y-${tick.label}`}>
                 <line x1={chartBounds.left} y1={tick.y} x2={chartBounds.right} y2={tick.y} />
-                <text x={chartBounds.left - 10} y={tick.y + 4} textAnchor="end">{tick.label}</text>
+                <text className="chart-y-tick" x={chartBounds.left - 12} y={tick.y + 4} textAnchor="end">{tick.label}</text>
               </g>
             ))}
             {chartData.xTicks.map(tick => (
               <g className="chart-grid" key={`x-${tick.label}-${tick.x}`}>
                 <line x1={tick.x} y1={chartBounds.top} x2={tick.x} y2={chartBounds.bottom} />
-                <text x={tick.x} y={chartBounds.bottom + 28} textAnchor="middle">{tick.label}</text>
+                <text x={tick.x} y={chartBounds.bottom + 30} textAnchor={tick.anchor}>{tick.label}</text>
               </g>
             ))}
             <line className="chart-axis" x1={chartBounds.left} y1={chartBounds.bottom} x2={chartBounds.right} y2={chartBounds.bottom} />
             <line className="chart-axis" x1={chartBounds.left} y1={chartBounds.top} x2={chartBounds.left} y2={chartBounds.bottom} />
+            {hoveredPoint && <line className="chart-hover-line" x1={hoveredPoint.x} y1={chartBounds.top} x2={hoveredPoint.x} y2={chartBounds.bottom} />}
             {chartData.path && <path d={chartData.path} />}
             {chartData.points.map((chartPoint, index) => (
               <circle
@@ -292,7 +361,7 @@ function App() {
               />
             ))}
             {hoveredPoint && (
-              <g className="chart-tooltip" transform={`translate(${Math.min(hoveredPoint.x + 12, 650)} ${Math.max(hoveredPoint.y - 54, 12)})`}>
+              <g className="chart-tooltip" transform={tooltipTransform(hoveredPoint)}>
                 <rect width="238" height="44" rx="6" />
                 <text x="10" y="17">
                   {formatDate(hoveredPoint.point.timestamp)}
@@ -300,7 +369,7 @@ function App() {
                 </text>
               </g>
             )}
-            {!chartData.path && <text x="450" y="164" textAnchor="middle">No points loaded</text>}
+            {!chartData.path && <text x={chartViewBox.width / 2} y={chartViewBox.height / 2} textAnchor="middle">No points loaded</text>}
           </svg>
           <div className="chart-footer">
             <span>{series.length} points</span>
@@ -310,21 +379,19 @@ function App() {
         </section>
 
         <PointTable points={series} unit={selected?.unit ?? ''} />
-
-        <MetadataPanel dataset={selected} />
-
-        <IngestionStatusPanel schedules={schedules} jobs={jobs} executions={executions} latestExecution={latestExecution} />
       </section>
     </main>
   );
 }
 
 function IngestionStatusPanel({
+  curveId,
   schedules,
   jobs,
   executions,
   latestExecution
 }: {
+  curveId: string;
   schedules: IngestionSchedule[];
   jobs: IngestionJob[];
   executions: IngestionExecution[];
@@ -334,8 +401,8 @@ function IngestionStatusPanel({
     <section className="ingestion-panel">
       <header className="section-heading">
         <div>
-          <h2>Ingestion status</h2>
-          <p>{schedules.length} schedules · {jobs.length} jobs · {executions.length} executions</p>
+          <h2>Curve ingestion</h2>
+          <p>{curveId ? `${curveId} · ` : ''}{schedules.length} schedules · {jobs.length} jobs · {executions.length} executions</p>
         </div>
         {latestExecution && <StatusBadge status={latestExecution.status} />}
       </header>
@@ -357,7 +424,7 @@ function IngestionStatusPanel({
         }))} />
         <StatusTable title="Jobs" rows={jobs.slice(0, 8).map(job => ({
           id: job.id,
-          primary: job.curveId,
+          primary: job.id,
           secondary: job.scheduleId,
           status: job.status,
           time: formatDate(job.queuedAt),
@@ -365,7 +432,7 @@ function IngestionStatusPanel({
         }))} />
         <StatusTable title="Executions" rows={executions.slice(0, 8).map(execution => ({
           id: execution.id,
-          primary: execution.curveId,
+          primary: execution.id,
           secondary: `${execution.inserted.toLocaleString()} inserted · ${execution.skipped.toLocaleString()} skipped`,
           status: execution.status,
           time: formatDate(execution.createdAt),
@@ -420,9 +487,12 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>;
 }
 
-function MetadataPanel({ dataset }: { dataset: DatasetMetadata | null }) {
-  if (!dataset) return <section className="metadata-panel"><h2>Metadata</h2><p>No dataset selected.</p></section>;
+function MetadataPanel({ dataset, curveId, datasetCount }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number }) {
+  if (!dataset) return <section className="metadata-panel"><h2>Curve details</h2><p>No curve selected.</p></section>;
   const rows = [
+    ['Curve', curveId],
+    ['Datasets', datasetCount.toLocaleString()],
+    ['Selected dataset', dataset.id],
     ['Source', dataset.source],
     ['Endpoint', dataset.endpoint],
     ['Metric', dataset.metric],
@@ -439,7 +509,7 @@ function MetadataPanel({ dataset }: { dataset: DatasetMetadata | null }) {
 
   return (
     <section className="metadata-panel">
-      <h2>Metadata</h2>
+      <h2>Curve details</h2>
       <dl>{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
     </section>
   );
@@ -477,11 +547,13 @@ function buildChartData(points: TimeSeriesPoint[], unit: string) {
   const padding = rawMin === rawMax ? Math.max(Math.abs(rawMin) * 0.1, 1) : 0;
   const min = rawMin - padding;
   const max = rawMax + padding;
-  const width = chartBounds.right - chartBounds.left;
+  const plotLeft = chartBounds.left + chartHorizontalPadding;
+  const plotRight = chartBounds.right - chartHorizontalPadding;
+  const width = plotRight - plotLeft;
   const height = chartBounds.bottom - chartBounds.top;
   const range = Math.max(max - min, 1);
   const chartPoints = numeric.map((point, index) => {
-    const x = numeric.length === 1 ? chartBounds.left + width / 2 : chartBounds.left + (index * width) / (numeric.length - 1);
+    const x = numeric.length === 1 ? plotLeft + width / 2 : plotLeft + (index * width) / (numeric.length - 1);
     const y = chartBounds.bottom - (((point.value as number) - min) * height) / range;
     return { x, y, point };
   });
@@ -489,18 +561,42 @@ function buildChartData(points: TimeSeriesPoint[], unit: string) {
   const yTicks = Array.from({ length: 5 }, (_, index) => {
     const value = min + (range * index) / 4;
     const y = chartBounds.bottom - ((value - min) * height) / range;
-    return { y, label: formatValue(value, unit) };
+    return { y, label: formatTickValue(value) };
   }).reverse();
-  const xTicks = pickTicks(chartPoints, 5).map(point => ({ x: point.x, label: formatCompactTime(point.point.timestamp) }));
+  const xTicks = buildXTicks(chartPoints);
   const path = chartPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
 
   return { points: chartPoints, path, xTicks, yTicks };
+}
+
+function buildXTicks(points: ChartPoint[]): ChartTick[] {
+  const ticks = pickTicks(points, 4);
+  const first = new Date(points[0].point.timestamp).getTime();
+  const last = new Date(points[points.length - 1].point.timestamp).getTime();
+  return ticks.map((point, index) => ({
+    x: point.x,
+    label: formatChartTime(point.point.timestamp, last - first),
+    anchor: index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'
+  }));
 }
 
 function pickTicks(points: ChartPoint[], maxTicks: number) {
   if (points.length <= maxTicks) return points;
   const step = (points.length - 1) / (maxTicks - 1);
   return Array.from({ length: maxTicks }, (_, index) => points[Math.round(index * step)]);
+}
+
+function tooltipPosition(point: ChartPoint) {
+  const width = 238;
+  const height = 44;
+  const x = Math.min(Math.max(point.x + 12, 8), chartViewBox.width - width - 8);
+  const y = Math.min(Math.max(point.y - height - 12, 8), chartViewBox.height - height - 8);
+  return { x, y };
+}
+
+function tooltipTransform(point: ChartPoint) {
+  const position = tooltipPosition(point);
+  return `translate(${position.x} ${position.y})`;
 }
 
 function unique(values: string[]) {
@@ -511,8 +607,20 @@ function formatDate(value: string) {
   return value ? new Date(value).toLocaleString() : '';
 }
 
-function formatCompactTime(value: string) {
-  return value ? new Date(value).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+function formatChartTime(value: string, rangeMs: number) {
+  if (!value) return '';
+  const date = new Date(value);
+  const day = 24 * 60 * 60 * 1000;
+  if (rangeMs <= 2 * day) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (rangeMs <= 14 * day) return date.toLocaleDateString([], { weekday: 'short', day: '2-digit' });
+  if (rangeMs <= 120 * day) return date.toLocaleDateString([], { month: 'short', day: '2-digit' });
+  return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+}
+
+function formatTickValue(value: number) {
+  if (Number.isInteger(value)) return value.toFixed(0);
+  if (Number.isInteger(value * 10)) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function formatValue(value: number | null, unit: string) {

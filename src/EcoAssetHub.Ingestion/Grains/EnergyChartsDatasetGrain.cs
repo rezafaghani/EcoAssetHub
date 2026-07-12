@@ -41,6 +41,7 @@ public class EnergyChartsDatasetGrain(
 
             foreach (var dataset in datasets)
             {
+                dataset.Metadata.CurveId = message.CurveId;
                 var saved = await insertClient.UpsertDatasetAsync(dataset.Metadata, cancellationToken);
                 dataset.Batch.DatasetId = saved.Id;
                 dataset.Batch.SourceMetadataVersion = saved.LastIngestedAt.ToUnixTimeSeconds().ToString();

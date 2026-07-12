@@ -4,9 +4,9 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 
 ## What It Does
 
-- Search Energy Charts datasets by endpoint, metric, or identifier.
+- Search Energy Charts curves and datasets by endpoint, metric, curve id, or identifier.
 - Inspect production and forecast time-series data in charts and tables.
-- Track ingestion schedules, queued jobs, executions, inserted rows, skipped rows, and failures.
+- Track each curve's ingestion schedules, queued jobs, executions, inserted rows, skipped rows, and failures.
 - Run the full stack locally with Compose.
 
 ## Stack
@@ -30,6 +30,21 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 | `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
 | `mongo` | MongoDB database | `27017` |
 | `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
+
+## Curve-Scoped Ingestion
+
+Schedules, jobs, and job executions are organized by scheduler `CurveId`, for example `dk.public_power` or `DK1.price`. During ingestion, that `CurveId` is stored on dataset metadata so the UI can start from a curve and then show only that curve's datasets, schedules, jobs, and executions.
+
+Useful query endpoints:
+
+```text
+GET /api/datasets?curveId={curveId}
+GET /api/ingestion/curves/{curveId}/schedules
+GET /api/ingestion/curves/{curveId}/jobs
+GET /api/ingestion/curves/{curveId}/executions
+```
+
+Older global ingestion endpoints still exist for compatibility, but the UI uses the curve-scoped endpoints.
 
 ## Run With Compose
 
@@ -91,4 +106,5 @@ cd src/EcoAssetHub.Client && npm test
 
 - Compose uses database name `centrica` and MongoDB connection string `mongodb://mongo:27017`.
 - The UI container installs npm 12 in its Node 24 build image before running `npm ci`.
+- Existing dataset metadata created before curve scoping may need re-ingestion/upsert to populate `CurveId`.
 - Current .NET builds may report NuGet audit warnings for transitive package vulnerabilities; treat those separately from compile errors.

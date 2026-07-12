@@ -10,9 +10,9 @@ public class IngestionControlController(IIngestionControlRepository repository) 
 {
     [HttpGet("schedules")]
     [ProducesResponseType(typeof(List<IngestionSchedule>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Schedules(CancellationToken cancellationToken)
+    public async Task<IActionResult> Schedules([FromQuery] string? curveId, CancellationToken cancellationToken)
     {
-        return Ok(await repository.GetSchedulesAsync(cancellationToken));
+        return Ok(await repository.GetSchedulesAsync(curveId, cancellationToken));
     }
 
     [HttpGet("jobs")]
@@ -30,8 +30,30 @@ public class IngestionControlController(IIngestionControlRepository repository) 
     public async Task<IActionResult> Executions(
         [FromQuery] string? jobId,
         [FromQuery] string? scheduleId,
+        [FromQuery] string? curveId,
         CancellationToken cancellationToken)
     {
-        return Ok(await repository.GetExecutionsAsync(jobId, scheduleId, cancellationToken));
+        return Ok(await repository.GetExecutionsAsync(jobId, scheduleId, curveId, cancellationToken));
+    }
+
+    [HttpGet("curves/{curveId}/schedules")]
+    [ProducesResponseType(typeof(List<IngestionSchedule>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CurveSchedules([FromRoute] string curveId, CancellationToken cancellationToken)
+    {
+        return Ok(await repository.GetSchedulesAsync(curveId, cancellationToken));
+    }
+
+    [HttpGet("curves/{curveId}/jobs")]
+    [ProducesResponseType(typeof(List<IngestionJob>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CurveJobs([FromRoute] string curveId, CancellationToken cancellationToken)
+    {
+        return Ok(await repository.GetJobsAsync(null, curveId, cancellationToken));
+    }
+
+    [HttpGet("curves/{curveId}/executions")]
+    [ProducesResponseType(typeof(List<IngestionExecution>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> CurveExecutions([FromRoute] string curveId, CancellationToken cancellationToken)
+    {
+        return Ok(await repository.GetExecutionsAsync(null, null, curveId, cancellationToken));
     }
 }

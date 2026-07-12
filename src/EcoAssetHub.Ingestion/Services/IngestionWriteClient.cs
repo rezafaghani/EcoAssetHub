@@ -10,6 +10,7 @@ public class IngestionWriteClient(IngestionWrite.IngestionWriteClient client)
         var request = new DatasetMetadataMessage
         {
             Id = metadata.Id,
+            CurveId = metadata.CurveId,
             Source = metadata.Source,
             Endpoint = metadata.Endpoint,
             Metric = metadata.Metric,
@@ -30,6 +31,7 @@ public class IngestionWriteClient(IngestionWrite.IngestionWriteClient client)
         return new DatasetMetadataDto
         {
             Id = response.Id,
+            CurveId = response.CurveId,
             Source = response.Source,
             Endpoint = response.Endpoint,
             Metric = response.Metric,

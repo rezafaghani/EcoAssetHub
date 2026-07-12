@@ -45,6 +45,7 @@ public class IngestionWriteGrpcService(
     private static DatasetMetadataDto ToDto(DatasetMetadataMessage message) => new()
     {
         Id = message.Id,
+        CurveId = message.CurveId,
         Source = message.Source,
         Endpoint = message.Endpoint,
         Metric = message.Metric,
@@ -66,6 +67,7 @@ public class IngestionWriteGrpcService(
         var message = new DatasetMetadataMessage
         {
             Id = dto.Id,
+            CurveId = dto.CurveId,
             Source = dto.Source,
             Endpoint = dto.Endpoint,
             Metric = dto.Metric,

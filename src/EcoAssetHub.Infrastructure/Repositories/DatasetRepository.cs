@@ -40,6 +40,8 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Endpoint))
             mongoFilter &= builder.Eq(x => x.Endpoint, filter.Endpoint);
+        if (!string.IsNullOrWhiteSpace(filter.CurveId))
+            mongoFilter &= builder.Eq(x => x.CurveId, filter.CurveId);
         if (!string.IsNullOrWhiteSpace(filter.Metric))
             mongoFilter &= builder.Eq(x => x.Metric, filter.Metric);
         if (!string.IsNullOrWhiteSpace(filter.Country))
@@ -55,6 +57,7 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         {
             var search = new BsonRegularExpression(filter.Search.Trim(), "i");
             mongoFilter &= builder.Regex(x => x.Id, search) |
+                           builder.Regex(x => x.CurveId, search) |
                            builder.Regex(x => x.Endpoint, search) |
                            builder.Regex(x => x.Metric, search) |
                            builder.Regex(x => x.Unit, search) |
@@ -98,6 +101,7 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
     private static EnergyDataset ToEntity(DatasetMetadataDto dto) => new()
     {
         Id = dto.Id,
+        CurveId = dto.CurveId,
         Source = dto.Source,
         Endpoint = dto.Endpoint,
         Metric = dto.Metric,
@@ -119,6 +123,7 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
     private static DatasetMetadataDto ToDto(EnergyDataset entity) => new()
     {
         Id = entity.Id,
+        CurveId = entity.CurveId,
         Source = entity.Source,
         Endpoint = entity.Endpoint,
         Metric = entity.Metric,

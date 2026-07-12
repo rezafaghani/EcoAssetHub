@@ -3,6 +3,7 @@ namespace EcoAssetHub.Domain.Models;
 public class DatasetMetadataDto
 {
     public string Id { get; set; } = string.Empty;
+    public string CurveId { get; set; } = string.Empty;
     public string Source { get; set; } = "energy-charts";
     public string Endpoint { get; set; } = string.Empty;
     public string Metric { get; set; } = string.Empty;

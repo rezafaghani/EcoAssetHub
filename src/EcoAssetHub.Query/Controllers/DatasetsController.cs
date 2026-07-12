@@ -14,6 +14,7 @@ public class DatasetsController(
     [ProducesResponseType(typeof(List<DatasetMetadataDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Search(
         [FromQuery] string? search,
+        [FromQuery] string? curveId,
         [FromQuery] string? endpoint,
         [FromQuery] string? metric,
         [FromQuery] string? country,
@@ -25,6 +26,7 @@ public class DatasetsController(
         var datasets = await datasetRepository.SearchAsync(new DatasetSearchFilter
         {
             Search = search,
+            CurveId = curveId,
             Endpoint = endpoint,
             Metric = metric,
             Country = country,

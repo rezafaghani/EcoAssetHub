@@ -1,6 +1,8 @@
 # EcoAssetHub Client
 
-React 19 + Vite frontend for exploring Energy Charts datasets and ingestion status.
+React 19 + Vite frontend for exploring Energy Charts curves, datasets, and curve-scoped ingestion status.
+
+The app starts from a Curve list. Selecting a curve shows only that curve's datasets, schedules, jobs, and job executions.
 
 ## Development server
 

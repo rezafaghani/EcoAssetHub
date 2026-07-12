@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\EcoAssetHub.API\EcoAssetHub.API.csproj" />
     <ProjectReference Include="..\..\src\EcoAssetHub.Infrastructure\EcoAssetHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\EcoAssetHub.Query\EcoAssetHub.Query.csproj" />
   </ItemGroup>
 
   <ItemGroup>

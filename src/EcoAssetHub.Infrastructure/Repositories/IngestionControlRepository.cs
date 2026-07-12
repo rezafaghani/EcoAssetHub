@@ -12,10 +12,14 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<IngestionSchedule>> GetSchedulesAsync(CancellationToken cancellationToken = default)
+    public async Task<List<IngestionSchedule>> GetSchedulesAsync(string? curveId = null, CancellationToken cancellationToken = default)
     {
+        var filter = string.IsNullOrWhiteSpace(curveId)
+            ? Builders<IngestionSchedule>.Filter.Empty
+            : Builders<IngestionSchedule>.Filter.Eq(x => x.CurveId, curveId);
+
         return await context.IngestionSchedules
-            .Find(_ => true)
+            .Find(filter)
             .SortBy(x => x.CurveId)
             .ToListAsync(cancellationToken);
     }
@@ -39,7 +43,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<IngestionExecution>> GetExecutionsAsync(string? jobId, string? scheduleId, CancellationToken cancellationToken = default)
+    public async Task<List<IngestionExecution>> GetExecutionsAsync(string? jobId, string? scheduleId, string? curveId, CancellationToken cancellationToken = default)
     {
         var filter = Builders<IngestionExecution>.Filter.Empty;
         if (!string.IsNullOrWhiteSpace(jobId))
@@ -49,6 +53,10 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         if (!string.IsNullOrWhiteSpace(scheduleId))
         {
             filter &= Builders<IngestionExecution>.Filter.Eq(x => x.ScheduleId, scheduleId);
+        }
+        if (!string.IsNullOrWhiteSpace(curveId))
+        {
+            filter &= Builders<IngestionExecution>.Filter.Eq(x => x.CurveId, curveId);
         }
 
         return await context.IngestionExecutions

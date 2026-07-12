@@ -25,6 +25,7 @@ message DatasetMetadataMessage {
   string license_info = 13;
   bool deprecated = 14;
   map<string, string> request_parameters = 15;
+  string curve_id = 16;
 }
 
 message TimeSeriesBatchMessage {
