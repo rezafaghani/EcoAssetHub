@@ -1,14 +1,482 @@
-/* You can add global styles to this file, and also import other style files */
-/* Success snackbar styling */
-.success-snackbar {
-    color: #fff;
-    background-color: #4caf50;
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #18202a;
+  background: #f4f6f8;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  background: #1f6feb;
+  color: white;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #98a2b3;
+  cursor: default;
+}
+
+button.secondary {
+  background: #eef2f7;
+  color: #1f2937;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #cfd7e3;
+  border-radius: 6px;
+  padding: 0.68rem 0.75rem;
+  background: white;
+  color: #18202a;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+}
+
+.sidebar {
+  border-right: 1px solid #d8dee8;
+  background: #ffffff;
+  padding: 1.25rem;
+  overflow: auto;
+}
+
+.brand {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.brand strong {
+  font-size: 1.3rem;
+}
+
+.brand span,
+.topbar p,
+.dataset small {
+  color: #667085;
+}
+
+.filter-stack {
+  display: grid;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.dataset-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dataset {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  background: #f7f9fc;
+  color: #18202a;
+  border: 1px solid #e2e8f0;
+}
+
+.dataset.active {
+  border-color: #1f6feb;
+  background: #eef5ff;
+}
+
+.workspace {
+  min-width: 0;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.control-panel,
+.chart-zone,
+.ingestion-panel,
+.metadata-panel,
+.table-panel {
+  background: #ffffff;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+}
+
+.control-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(560px, 1.8fr);
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.title-block {
+  min-width: 0;
+  padding-top: 0.1rem;
+}
+
+.title-block h1,
+.metadata-panel h2,
+.table-panel h2 {
+  margin: 0;
+}
+
+.title-block h1 {
+  font-size: 1.05rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-block p {
+  margin: 0.15rem 0 0;
+  color: #667085;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forecast-focus {
+  display: grid;
+  gap: 0.1rem;
+  align-self: start;
+  padding-top: 0;
+}
+
+.forecast-focus h1 {
+  font-size: 1rem;
+}
+
+.forecast-focus p {
+  font-size: 0.72rem;
+}
+
+.range-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(145px, 1fr)) auto auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.range-toolbar label {
+  display: grid;
+  gap: 0.2rem;
+  color: #475467;
+  font-size: 0.78rem;
+}
+
+.range-toolbar input,
+.range-toolbar button {
+  min-height: 2rem;
+}
+
+.range-toolbar input {
+  padding: 0.35rem 0.45rem;
+  font-size: 0.8rem;
+}
+
+.range-toolbar button {
+  align-self: end;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #475467;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  align-self: end;
+  min-height: 2rem;
+  padding: 0 0.35rem;
+}
+
+.live-toggle input {
+  width: auto;
+}
+
+.error {
+  border-radius: 6px;
+  border: 1px solid #f0b4b4;
+  background: #fff1f1;
+  color: #9b1c1c;
+  padding: 0.8rem 1rem;
+}
+
+.chart-zone {
+  padding: 1rem;
+}
+
+svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+svg line {
+  stroke: #cfd7e3;
+  stroke-width: 2;
+}
+
+svg path {
+  fill: none;
+  stroke: #1f6feb;
+  stroke-width: 3;
+}
+
+svg circle {
+  fill: #ffffff;
+  stroke: #1f6feb;
+  stroke-width: 2;
+}
+
+svg circle:hover {
+  fill: #1f6feb;
+}
+
+svg text {
+  fill: #667085;
+}
+
+.point-label line {
+  stroke: #d0d5dd;
+  stroke-width: 1;
+}
+
+.point-label text {
+  fill: #344054;
+  font-size: 10px;
+}
+
+.chart-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding-top: 0.8rem;
+  color: #667085;
+  font-size: 0.88rem;
+}
+
+.ingestion-panel {
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.section-heading h2,
+.status-table h3 {
+  margin: 0;
+}
+
+.section-heading p {
+  margin: 0.25rem 0 0;
+  color: #667085;
+}
+
+.status-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.72fr) repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.metric-tile {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.55rem 0.65rem;
+  background: #f8fafc;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.metric-tile span {
+  color: #667085;
+  font-size: 0.85rem;
+}
+
+.metric-tile strong {
+  font-size: 1.05rem;
+}
+
+.metric-tile-compact {
+  padding: 0.45rem 0.55rem;
+}
+
+.metric-tile-compact span {
+  font-size: 0.78rem;
+}
+
+.metric-tile-compact strong {
+  font-size: 0.98rem;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.status-table {
+  min-width: 0;
+}
+
+.status-table h3 {
+  font-size: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.status-table td strong,
+.status-table td small {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-table td small {
+  color: #667085;
+  margin-top: 0.2rem;
+}
+
+.table-scroll.compact {
+  max-height: 260px;
+  margin-top: 0;
+}
+
+.compact th,
+.compact td {
+  padding: 0.45rem 0.5rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: #eef2f7;
+  color: #344054;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-badge.completed,
+.status-badge.enabled {
+  background: #dcfae6;
+  color: #067647;
+}
+
+.status-badge.running {
+  background: #d1e9ff;
+  color: #175cd3;
+}
+
+.status-badge.queued {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.status-badge.failed,
+.status-badge.disabled {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.metadata-panel,
+.table-panel {
+  padding: 1rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 0.55rem 0.8rem;
+  margin: 1rem 0 0;
+}
+
+dt {
+  color: #667085;
+}
+
+dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.table-scroll {
+  max-height: 430px;
+  overflow: auto;
+  margin-top: 0.8rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.65rem;
+  border-bottom: 1px solid #edf1f5;
+  white-space: nowrap;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: white;
+  color: #475467;
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  .control-panel,
+  .range-toolbar,
+  .status-summary,
+  .status-grid {
+    grid-template-columns: 1fr;
   }
-  
-  /* Error snackbar styling */
-  .error-snackbar {
-    color: #fff;
-    background-color: #f44336;
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #d8dee8;
   }
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .range-toolbar button,
+  .live-toggle {
+    align-self: stretch;
+  }
+}
