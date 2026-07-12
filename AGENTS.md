@@ -1,45 +1,32 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-EcoAssetHub is organized as a .NET solution with an Angular client:
 
-- `src/EcoAssetHub.API`: ASP.NET Core API, controllers, MediatR commands/queries, workers, app settings, and CSV seed data in `FileData/`.
-- `src/EcoAssetHub.Domain`: entities, domain models, repository interfaces, and domain exceptions.
-- `src/EcoAssetHub.Infrastructure`: persistence context and repository implementations.
-- `src/EcoAssetHub.Client`: Angular application, components, services, routes, styles, and frontend tests.
-- `tests/EcoAssetHub.UnitTest`: xUnit tests plus test CSV data in `TestData/`.
-
-Keep backend features aligned with the CQRS-style folders under `Application/*Commands`. Put shared contracts in `Domain`, persistence details in `Infrastructure`, and HTTP entry points in `API/Controllers`.
+EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API, `EcoAssetHub.Query` serves dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; MongoDB repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
 
 ## Build, Test, and Development Commands
 
-- `dotnet restore EcoAssetHub.sln`: restore backend and test project packages.
-- `dotnet build EcoAssetHub.sln`: compile the full .NET solution.
-- `dotnet test EcoAssetHub.sln`: run xUnit tests in `tests/EcoAssetHub.UnitTest`.
-- `dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj`: run the API locally.
-- `cd src/EcoAssetHub.Client && npm install`: install Angular dependencies.
-- `cd src/EcoAssetHub.Client && npm start`: run Angular dev server on `127.0.0.1`.
-- `cd src/EcoAssetHub.Client && npm run build`: build the Angular app.
-- `cd src/EcoAssetHub.Client && npm test`: run Jasmine/Karma frontend tests.
+- `dotnet restore EcoAssetHub.sln`: restore backend dependencies.
+- `dotnet build EcoAssetHub.sln`: compile all .NET projects.
+- `dotnet test EcoAssetHub.sln`: run xUnit backend tests.
+- `dotnet run --project src/EcoAssetHub.Query/EcoAssetHub.Query.csproj`: run the query API locally.
+- `cd src/EcoAssetHub.Client && npm install`: install client dependencies.
+- `cd src/EcoAssetHub.Client && npm start`: start Vite on `127.0.0.1`.
+- `cd src/EcoAssetHub.Client && npm test`: run Vitest.
+- `docker compose up -d` or `podman compose up -d`: run the full stack from `docker-compose.yml`.
 
 ## Coding Style & Naming Conventions
 
-C# projects use nullable reference types and implicit usings. Use PascalCase for types and methods, camelCase for locals and parameters, and `I*Repository` for repository interfaces. Name command/query files by action, for example `CreateWindTurbineCommandHandler.cs`.
-
-The Angular `.editorconfig` uses UTF-8, two-space indentation, final newlines, and single quotes for TypeScript. Keep Angular files in the standard `*.component.ts/html/css/spec.ts` pattern.
+C# projects use nullable reference types and implicit usings. Keep namespaces, folders, and types aligned with existing patterns such as `Repositories/*Repository.cs`, `Controllers/*Controller.cs`, and command/query handler folders. Use PascalCase for C# types and methods, camelCase for locals and parameters. The client `.editorconfig` requires UTF-8, spaces, 2-space indentation, final newlines, and single quotes in TypeScript.
 
 ## Testing Guidelines
 
-Backend tests use xUnit, Moq, and coverlet. Place tests near the matching feature area under `tests/EcoAssetHub.UnitTest`, and name classes after the unit under test, such as `CreateSolarPanelCommandHandlerTests`. Frontend specs live beside components and services as `*.spec.ts`.
-
-Run relevant tests before submitting changes; use full `dotnet test EcoAssetHub.sln` for backend changes that touch shared behavior.
+Backend tests use xUnit, Moq, and coverlet. Name files after the class or behavior under test, for example `ProductionRepositoryTests.cs` or `CreateWindTurbineCommandHandlerTests.cs`. Keep test fixtures in `TestData` and mark them for output copying when needed. Client tests use Vitest with `*.test.ts` or `*.test.tsx` files.
 
 ## Commit & Pull Request Guidelines
 
-Recent history uses short messages, often Conventional Commit prefixes such as `fix:` and `feat:`. Prefer concise, imperative messages like `fix: validate solar panel capacity`.
-
-Pull requests should include a brief summary, test results, linked issues when available, and screenshots for UI changes. Call out configuration, data, or migration impacts explicitly.
+Recent history uses Conventional Commit-style subjects such as `feat: Implement ingestion service`, `fix: compact forecast dataset panel`, and `chore: clean up React client`. Keep commits focused and imperative. Pull requests should describe the change, list test commands run, link issues when applicable, and include screenshots for visible UI changes.
 
 ## Security & Configuration Tips
 
-Do not commit secrets. Keep local connection strings and credentials in user secrets or environment-specific settings. Treat CSV files in `FileData/` and `TestData/` as fixtures; avoid replacing them without updating affected tests.
+Keep secrets out of `appsettings.json` and client source. Use environment variables for connection strings, API URLs, and credentials. Compose defaults include MongoDB at `mongodb://mongo:27017` and RabbitMQ management on `localhost:15672`; avoid committing local overrides.

@@ -195,7 +195,7 @@ function App() {
         <div className="filter-panel">
           <label>
             <span>Search</span>
-            <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && loadDatasets()} placeholder="Dataset name or id" />
+            <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && void loadDatasets()} placeholder="Dataset name or id" />
           </label>
           <label>
             <span>Endpoint</span>
@@ -211,7 +211,7 @@ function App() {
               {metrics.map(value => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
-          <button onClick={loadDatasets}>Search</button>
+          <button onClick={() => void loadDatasets()}>Search</button>
         </div>
         <div className="dataset-list">
           {datasets.map(dataset => (
