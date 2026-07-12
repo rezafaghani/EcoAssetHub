@@ -1,5 +1,6 @@
 FROM node:24-alpine AS build
 WORKDIR /app
+RUN npm install -g npm@12.0.1
 COPY src/EcoAssetHub.Client/package*.json ./
 RUN npm ci
 COPY src/EcoAssetHub.Client/ ./

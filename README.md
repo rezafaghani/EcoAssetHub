@@ -1,45 +1,94 @@
 # EcoAssetHub
 
-## Overview
-EcoAssetHub is a renewable-energy data platform built around a .NET backend and a React/Vite client. The current UI focuses on dataset exploration, Energy Charts time-series inspection, and ingestion status monitoring.
+EcoAssetHub is a renewable-energy data platform for collecting, storing, querying, and visualizing Energy Charts time-series data. It combines .NET services, MongoDB persistence, RabbitMQ-based ingestion workers, and a React/Vite UI for dataset exploration and ingestion monitoring.
 
-## Features
-- **Dataset explorer:** Search datasets by endpoint, metric, or identifier.
-- **Time-series viewer:** Inspect charted production and forecast data.
-- **Ingestion monitoring:** Review schedules, jobs, and executions.
+## What It Does
 
-## Technologies Used
-- Backend: .NET 8
-- Frontend: React 19 + Vite
-- Data access: MongoDB
-- Testing: xUnit, Vitest
+- Search Energy Charts datasets by endpoint, metric, or identifier.
+- Inspect production and forecast time-series data in charts and tables.
+- Track ingestion schedules, queued jobs, executions, inserted rows, skipped rows, and failures.
+- Run the full stack locally with Compose.
 
-## Setup and Installation
-1. Install the .NET 8 SDK.
-2. Install Node.js 20+.
-3. Install MongoDB if you want to run the API against a local instance.
+## Stack
 
-## Usage
+- Backend: .NET 10
+- UI: React 19 + Vite
+- Data: MongoDB 7
+- Messaging: RabbitMQ 3 Management
+- Tests: xUnit and Vitest
+- Containers: Dockerfiles plus `docker-compose.yml`, usable with Podman Compose or Docker Compose
+
+## Services
+
+| Service | Purpose | Port |
+| --- | --- | --- |
+| `ui` | React/Vite app served by Nginx | `8080` |
+| `api` | Main HTTP API | `5100` |
+| `insert` | Insert API plus gRPC ingestion endpoint | `5101`, `5103` |
+| `query` | Dataset and time-series query API | `5102` |
+| `scheduler` | Queues ingestion jobs on schedule | internal |
+| `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
+| `mongo` | MongoDB database | `27017` |
+| `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
+
+## Run With Compose
+
+Podman:
+
+```bash
+podman compose build
+podman compose up -d
+```
+
+Docker:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+Then open:
+
+- UI: `http://localhost:8080`
+- RabbitMQ management: `http://localhost:15672`
+
+Stop the stack:
+
+```bash
+podman compose down
+```
+
+Use `docker compose down` if you started it with Docker.
+
+## Local Development
+
 Backend:
+
 ```bash
 dotnet restore EcoAssetHub.sln
-dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj
+dotnet build EcoAssetHub.sln
+dotnet run --project src/EcoAssetHub.Query/EcoAssetHub.Query.csproj
 ```
 
 Client:
+
 ```bash
 cd src/EcoAssetHub.Client
 npm install
 npm start
 ```
 
-## Development and Contribution
-Run the relevant build or test command before submitting changes:
+The client expects Node `>=24.18.0 <27` and npm `>=12 <13`. Set `VITE_API_BASE_URL` if the query API is not available through `/api`.
 
-- `dotnet build EcoAssetHub.sln`
-- `dotnet test EcoAssetHub.sln`
-- `cd src/EcoAssetHub.Client && npm run build`
-- `cd src/EcoAssetHub.Client && npm test`
+## Tests
 
-## License
-This project is licensed under the MIT License.
+```bash
+dotnet test EcoAssetHub.sln
+cd src/EcoAssetHub.Client && npm test
+```
+
+## Notes
+
+- Compose uses database name `centrica` and MongoDB connection string `mongodb://mongo:27017`.
+- The UI container installs npm 12 in its Node 24 build image before running `npm ci`.
+- Current .NET builds may report NuGet audit warnings for transitive package vulnerabilities; treat those separately from compile errors.

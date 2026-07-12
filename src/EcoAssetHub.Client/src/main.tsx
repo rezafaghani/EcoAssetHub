@@ -192,17 +192,26 @@ function App() {
           <strong>EcoAssetHub</strong>
           <span>Energy Charts explorer</span>
         </div>
-        <div className="filter-stack">
-          <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && loadDatasets()} placeholder="Search datasets" />
-          <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
-            <option value="">All endpoints</option>
-            {endpoints.map(value => <option key={value} value={value}>{value}</option>)}
-          </select>
-          <select value={metric} onChange={event => setMetric(event.target.value)}>
-            <option value="">All metrics</option>
-            {metrics.map(value => <option key={value} value={value}>{value}</option>)}
-          </select>
-          <button onClick={loadDatasets}>Refresh</button>
+        <div className="filter-panel">
+          <label>
+            <span>Search</span>
+            <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && loadDatasets()} placeholder="Dataset name or id" />
+          </label>
+          <label>
+            <span>Endpoint</span>
+            <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
+              <option value="">All endpoints</option>
+              {endpoints.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Metric</span>
+            <select value={metric} onChange={event => setMetric(event.target.value)}>
+              <option value="">All metrics</option>
+              {metrics.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <button onClick={loadDatasets}>Search</button>
         </div>
         <div className="dataset-list">
           {datasets.map(dataset => (
@@ -228,9 +237,9 @@ function App() {
           </div>
 
           <div className="range-toolbar">
-            <label>Start<input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} /></label>
-            <label>End<input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} /></label>
-            <label>As of<input type="datetime-local" value={asOf} onChange={event => setAsOf(event.target.value)} /></label>
+            <label><span>Start</span><input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} /></label>
+            <label><span>End</span><input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} /></label>
+            <label><span>As of</span><input type="datetime-local" value={asOf} onChange={event => setAsOf(event.target.value)} /></label>
             <label className="live-toggle">
               <input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)} />
               Live
