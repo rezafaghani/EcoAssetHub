@@ -73,6 +73,12 @@ interface ChartPoint {
   point: TimeSeriesPoint;
 }
 
+const chartBounds = {
+  left: 72,
+  right: 872,
+  top: 28,
+  bottom: 286
+};
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const refreshIntervalMs = 15_000;
 const forecastDatasetId = 'energy-charts:public_power_forecast:forecast:dk:-:-:wind_offshore:day-ahead:-:quarter-hour';
@@ -94,6 +100,7 @@ function App() {
   const [live, setLive] = useState(true);
   const [lastLiveRefresh, setLastLiveRefresh] = useState('');
   const [error, setError] = useState('');
+  const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   useEffect(() => {
     void loadDatasets();
@@ -102,10 +109,13 @@ function App() {
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
   const metrics = useMemo(() => unique(datasets.map(x => x.metric)), [datasets]);
-  const chartPoints = useMemo(() => buildChartPoints(series), [series]);
-  const chartPath = useMemo(() => buildPath(chartPoints), [chartPoints]);
+  const chartData = useMemo(() => buildChartData(series, selected?.unit ?? ''), [series, selected?.unit]);
   const latestExecution = executions[0];
   const forecastFocused = selected?.id === forecastDatasetId;
+
+  useEffect(() => {
+    setHoveredPoint(null);
+  }, [selected?.id, series]);
 
   useEffect(() => {
     if (!live) return;
@@ -251,25 +261,46 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         <section className="chart-zone">
-          <svg viewBox="0 0 900 320" role="img" aria-label="Dataset time series">
-            <line x1="44" y1="276" x2="860" y2="276" />
-            <line x1="44" y1="36" x2="44" y2="276" />
-            {chartPath && <path d={chartPath} />}
-            {chartPoints.map((chartPoint, index) => (
-              <circle key={`${chartPoint.point.timestamp}-${chartPoint.point.asOf}-${index}`} cx={chartPoint.x} cy={chartPoint.y} r="4">
-                <title>{formatDate(chartPoint.point.timestamp)} | {formatValue(chartPoint.point.value, selected?.unit ?? '')}</title>
-              </circle>
-            ))}
-            {labelPoints(chartPoints).map((chartPoint, index) => (
-              <g className="point-label" key={`${chartPoint.point.timestamp}-label-${index}`}>
-                <line x1={chartPoint.x} y1={chartPoint.y - 7} x2={chartPoint.x} y2={chartPoint.y - 22} />
-                <text x={chartPoint.x} y={chartPoint.y - 26} textAnchor="middle">
-                  {formatCompactTime(chartPoint.point.timestamp)}
-                  <tspan x={chartPoint.x} dy="13">{formatValue(chartPoint.point.value, selected?.unit ?? '')}</tspan>
-                </text>
+          <svg viewBox="0 0 900 340" role="img" aria-label="Dataset time series">
+            {chartData.yTicks.map(tick => (
+              <g className="chart-grid" key={`y-${tick.label}`}>
+                <line x1={chartBounds.left} y1={tick.y} x2={chartBounds.right} y2={tick.y} />
+                <text x={chartBounds.left - 10} y={tick.y + 4} textAnchor="end">{tick.label}</text>
               </g>
             ))}
-            {!chartPath && <text x="450" y="160" textAnchor="middle">No points loaded</text>}
+            {chartData.xTicks.map(tick => (
+              <g className="chart-grid" key={`x-${tick.label}-${tick.x}`}>
+                <line x1={tick.x} y1={chartBounds.top} x2={tick.x} y2={chartBounds.bottom} />
+                <text x={tick.x} y={chartBounds.bottom + 28} textAnchor="middle">{tick.label}</text>
+              </g>
+            ))}
+            <line className="chart-axis" x1={chartBounds.left} y1={chartBounds.bottom} x2={chartBounds.right} y2={chartBounds.bottom} />
+            <line className="chart-axis" x1={chartBounds.left} y1={chartBounds.top} x2={chartBounds.left} y2={chartBounds.bottom} />
+            {chartData.path && <path d={chartData.path} />}
+            {chartData.points.map((chartPoint, index) => (
+              <circle
+                key={`${chartPoint.point.timestamp}-${chartPoint.point.asOf}-${index}`}
+                cx={chartPoint.x}
+                cy={chartPoint.y}
+                r="4"
+                tabIndex={0}
+                aria-label={`${formatDate(chartPoint.point.timestamp)} ${formatValue(chartPoint.point.value, selected?.unit ?? '')}`}
+                onMouseEnter={() => setHoveredPoint(chartPoint)}
+                onMouseLeave={() => setHoveredPoint(null)}
+                onFocus={() => setHoveredPoint(chartPoint)}
+                onBlur={() => setHoveredPoint(null)}
+              />
+            ))}
+            {hoveredPoint && (
+              <g className="chart-tooltip" transform={`translate(${Math.min(hoveredPoint.x + 12, 650)} ${Math.max(hoveredPoint.y - 54, 12)})`}>
+                <rect width="238" height="44" rx="6" />
+                <text x="10" y="17">
+                  {formatDate(hoveredPoint.point.timestamp)}
+                  <tspan x="10" dy="17">{formatValue(hoveredPoint.point.value, selected?.unit ?? '')}</tspan>
+                </text>
+              </g>
+            )}
+            {!chartData.path && <text x="450" y="164" textAnchor="middle">No points loaded</text>}
           </svg>
           <div className="chart-footer">
             <span>{series.length} points</span>
@@ -436,28 +467,40 @@ function PointTable({ points, unit }: { points: TimeSeriesPoint[]; unit: string 
   );
 }
 
-function buildChartPoints(points: TimeSeriesPoint[]): ChartPoint[] {
+function buildChartData(points: TimeSeriesPoint[], unit: string) {
   const numeric = points.filter(point => point.value !== null);
-  if (numeric.length === 0) return [];
+  if (numeric.length === 0) return { points: [], path: '', xTicks: [], yTicks: [] };
+
   const values = numeric.map(point => point.value as number);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const padding = rawMin === rawMax ? Math.max(Math.abs(rawMin) * 0.1, 1) : 0;
+  const min = rawMin - padding;
+  const max = rawMax + padding;
+  const width = chartBounds.right - chartBounds.left;
+  const height = chartBounds.bottom - chartBounds.top;
   const range = Math.max(max - min, 1);
-  return numeric.map((point, index) => {
-    const x = numeric.length === 1 ? 450 : 44 + (index * 816) / (numeric.length - 1);
-    const y = 276 - (((point.value as number) - min) * 240) / range;
+  const chartPoints = numeric.map((point, index) => {
+    const x = numeric.length === 1 ? chartBounds.left + width / 2 : chartBounds.left + (index * width) / (numeric.length - 1);
+    const y = chartBounds.bottom - (((point.value as number) - min) * height) / range;
     return { x, y, point };
   });
+
+  const yTicks = Array.from({ length: 5 }, (_, index) => {
+    const value = min + (range * index) / 4;
+    const y = chartBounds.bottom - ((value - min) * height) / range;
+    return { y, label: formatValue(value, unit) };
+  }).reverse();
+  const xTicks = pickTicks(chartPoints, 5).map(point => ({ x: point.x, label: formatCompactTime(point.point.timestamp) }));
+  const path = chartPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+
+  return { points: chartPoints, path, xTicks, yTicks };
 }
 
-function buildPath(points: ChartPoint[]) {
-  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-}
-
-function labelPoints(points: ChartPoint[]) {
-  if (points.length <= 8) return points;
-  const step = Math.ceil(points.length / 8);
-  return points.filter((_, index) => index % step === 0 || index === points.length - 1);
+function pickTicks(points: ChartPoint[], maxTicks: number) {
+  if (points.length <= maxTicks) return points;
+  const step = (points.length - 1) / (maxTicks - 1);
+  return Array.from({ length: maxTicks }, (_, index) => points[Math.round(index * step)]);
 }
 
 function unique(values: string[]) {
