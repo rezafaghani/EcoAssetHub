@@ -25,26 +25,26 @@ public class ProductionRepository(EcoAssetHubContext context) : IProductionRepos
 
     public async Task<List<PowerProductMonthlyDto>> SpotPriceMonthly(PowerProductionFilter searchFilter)
     {
-        var filter = Builders<PowerProduction>.Filter.Gte(x => x.ProductionDateTime, searchFilter.StartDateTime) &
-                     Builders<PowerProduction>.Filter.Lte(x => x.ProductionDateTime, searchFilter.EndDateTime);
+        var points = await GetSeriesAsync(
+            searchFilter.MeterPointId,
+            searchFilter.StartDateTime,
+            searchFilter.EndDateTime,
+            null);
 
-        var productions = await context.PowerProductions.Find(filter).ToListAsync();
-        var latestVersions = ResolveLatestVersions(productions, null);
-
-        return latestVersions
-            .GroupBy(x => new { x.ProductionDateTime.Year, x.ProductionDateTime.Month, x.MeterPointId })
+        return points
+            .GroupBy(x => new { x.Timestamp.Year, x.Timestamp.Month })
             .Select(group => new PowerProductMonthlyDto
             {
                 Month = group.Key.Month,
-                Production = group.Sum(x => x.Production),
-                MeterPointId = group.Key.MeterPointId
+                Production = Convert.ToDecimal(group.Sum(x => x.Value ?? 0)),
+                MeterPointId = searchFilter.MeterPointId.ToString()
             })
             .ToList();
     }
 
     public async Task<string> CreateAsync(PowerProduction input, CancellationToken cancellationToken = default)
     {
-        var request = new TimeSeriesBatchRequest
+        var result = await InsertBatchAsync(new TimeSeriesBatchRequest
         {
             MeterPointId = long.Parse(input.MeterPointId),
             Points =
@@ -55,9 +55,8 @@ public class ProductionRepository(EcoAssetHubContext context) : IProductionRepos
                     Value = input.Production
                 }
             ]
-        };
+        }, cancellationToken);
 
-        var result = await InsertBatchAsync(request, cancellationToken);
         return result.Inserted == 1 ? input.Id : string.Empty;
     }
 
@@ -86,33 +85,34 @@ public class ProductionRepository(EcoAssetHubContext context) : IProductionRepos
     {
         var insertTime = DateTimeOffset.UtcNow;
         var result = new TimeSeriesInsertResult { AsOf = insertTime };
+        var meterPointId = request.MeterPointId.ToString();
+
+        await using var connection = context.CreateClickHouseConnection();
+        await connection.OpenAsync(cancellationToken);
 
         foreach (var point in request.Points.OrderBy(x => x.Timestamp))
         {
-            var meterPointId = request.MeterPointId.ToString();
-            var existingVersions = await context.PowerProductions
-                .Find(x => x.MeterPointId == meterPointId && x.ProductionDateTime == point.Timestamp)
-                .ToListAsync(cancellationToken);
-
-            var latest = existingVersions
-                .OrderByDescending(x => x.AsOf)
-                .ThenByDescending(x => x.InsertedAt)
-                .FirstOrDefault();
-
-            if (latest?.Production == point.Value)
+            var latest = await GetLatestProductionAsync(connection, meterPointId, point.Timestamp, cancellationToken);
+            if (latest == point.Value)
             {
                 result.Skipped++;
                 continue;
             }
 
-            await context.PowerProductions.InsertOneAsync(new PowerProduction
-            {
-                MeterPointId = meterPointId,
-                ProductionDateTime = point.Timestamp,
-                Production = Convert.ToInt32(point.Value ?? 0),
-                AsOf = insertTime,
-                InsertedAt = insertTime
-            }, cancellationToken: cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO power_productions (
+                    meter_point_id, production_datetime, production, as_of, inserted_at)
+                VALUES (
+                    {meterPointId:String}, {productionDateTime:DateTime64(3)}, {production:Int32},
+                    {asOf:DateTime64(3)}, {insertedAt:DateTime64(3)})
+                """;
+            command.AddParameter("meterPointId", meterPointId);
+            command.AddParameter("productionDateTime", DbValue.Utc(point.Timestamp));
+            command.AddParameter("production", Convert.ToInt32(point.Value ?? 0));
+            command.AddParameter("asOf", DbValue.Utc(insertTime));
+            command.AddParameter("insertedAt", DbValue.Utc(insertTime));
+            await command.ExecuteNonQueryAsync(cancellationToken);
 
             result.Inserted++;
         }
@@ -127,41 +127,63 @@ public class ProductionRepository(EcoAssetHubContext context) : IProductionRepos
         DateTimeOffset? asOf,
         CancellationToken cancellationToken = default)
     {
-        var meterPoint = meterPointId.ToString();
-        var filter = Builders<PowerProduction>.Filter.Eq(x => x.MeterPointId, meterPoint) &
-                     Builders<PowerProduction>.Filter.Gte(x => x.ProductionDateTime, start) &
-                     Builders<PowerProduction>.Filter.Lte(x => x.ProductionDateTime, end);
-
+        await using var connection = context.CreateClickHouseConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = $$"""
+            SELECT production_datetime, production, as_of
+            FROM (
+                SELECT
+                    production_datetime,
+                    production,
+                    as_of,
+                    row_number() OVER (PARTITION BY meter_point_id, production_datetime ORDER BY as_of DESC, inserted_at DESC) AS rn
+                FROM power_productions
+                WHERE meter_point_id = {meterPointId:String}
+                  AND production_datetime >= {start:DateTime64(3)}
+                  AND production_datetime <= {end:DateTime64(3)}
+                  {{(asOf.HasValue ? "AND as_of <= {asOf:DateTime64(3)}" : "")}}
+            )
+            WHERE rn = 1
+            ORDER BY production_datetime
+            """;
+        command.AddParameter("meterPointId", meterPointId.ToString());
+        command.AddParameter("start", DbValue.Utc(start));
+        command.AddParameter("end", DbValue.Utc(end));
         if (asOf.HasValue)
         {
-            filter &= Builders<PowerProduction>.Filter.Lte(x => x.AsOf, asOf.Value);
+            command.AddParameter("asOf", DbValue.Utc(asOf.Value));
         }
 
-        var productions = await context.PowerProductions.Find(filter).ToListAsync(cancellationToken);
-
-        return ResolveLatestVersions(productions, asOf)
-            .OrderBy(x => x.ProductionDateTime)
-            .Select(x => new TimeSeriesPointDto
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<TimeSeriesPointDto>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new TimeSeriesPointDto
             {
-                Timestamp = x.ProductionDateTime,
-                Value = x.Production,
-                AsOf = x.AsOf
-            })
-            .ToList();
+                Timestamp = new DateTimeOffset(reader.GetDateTime(0), TimeSpan.Zero),
+                Value = reader.GetInt32(1),
+                AsOf = new DateTimeOffset(reader.GetDateTime(2), TimeSpan.Zero)
+            });
+        }
+
+        return result;
     }
 
-    private static List<PowerProduction> ResolveLatestVersions(List<PowerProduction> productions, DateTimeOffset? asOf)
+    private static async Task<double?> GetLatestProductionAsync(System.Data.Common.DbConnection connection, string meterPointId, DateTimeOffset timestamp, CancellationToken cancellationToken)
     {
-        var filtered = asOf.HasValue
-            ? productions.Where(x => x.AsOf <= asOf.Value)
-            : productions;
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT production
+            FROM power_productions
+            WHERE meter_point_id = {meterPointId:String} AND production_datetime = {timestamp:DateTime64(3)}
+            ORDER BY as_of DESC, inserted_at DESC
+            LIMIT 1
+            """;
+        command.AddParameter("meterPointId", meterPointId);
+        command.AddParameter("timestamp", DbValue.Utc(timestamp));
 
-        return filtered
-            .GroupBy(x => new { x.MeterPointId, x.ProductionDateTime })
-            .Select(group => group
-                .OrderByDescending(x => x.AsOf)
-                .ThenByDescending(x => x.InsertedAt)
-                .First())
-            .ToList();
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is null or DBNull ? null : Convert.ToDouble(value);
     }
 }

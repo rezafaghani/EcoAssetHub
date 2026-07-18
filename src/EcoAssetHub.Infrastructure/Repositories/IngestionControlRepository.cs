@@ -1,5 +1,7 @@
+using System.Text.Json;
 using EcoAssetHub.Domain.Models;
-using MongoDB.Bson;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
@@ -7,119 +9,143 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
 {
     public async Task<List<IngestionSchedule>> GetEnabledSchedulesAsync(CancellationToken cancellationToken = default)
     {
-        return await context.IngestionSchedules
-            .Find(x => x.Enabled)
-            .ToListAsync(cancellationToken);
+        return await QuerySchedulesAsync("WHERE enabled = true", [], cancellationToken);
     }
 
     public async Task<List<IngestionSchedule>> GetSchedulesAsync(string? curveId = null, CancellationToken cancellationToken = default)
     {
-        var filter = string.IsNullOrWhiteSpace(curveId)
-            ? Builders<IngestionSchedule>.Filter.Empty
-            : Builders<IngestionSchedule>.Filter.Eq(x => x.CurveId, curveId);
+        var parameters = new List<NpgsqlParameter>();
+        var where = "";
+        if (!string.IsNullOrWhiteSpace(curveId))
+        {
+            where = "WHERE curve_id = @curve_id";
+            parameters.Add(new NpgsqlParameter("curve_id", curveId));
+        }
 
-        return await context.IngestionSchedules
-            .Find(filter)
-            .SortBy(x => x.CurveId)
-            .ToListAsync(cancellationToken);
+        return await QuerySchedulesAsync($"{where} ORDER BY curve_id", parameters, cancellationToken);
     }
 
     public async Task<List<IngestionJob>> GetJobsAsync(string? scheduleId, string? curveId, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<IngestionJob>.Filter.Empty;
-        if (!string.IsNullOrWhiteSpace(scheduleId))
+        var (where, parameters) = BuildWhere(("schedule_id", scheduleId), ("curve_id", curveId));
+        var sql = $"""
+            SELECT id, schedule_id, curve_id, status, queued_at, started_at, finished_at, error
+            FROM ingestion_jobs
+            {where}
+            ORDER BY queued_at DESC
+            LIMIT 500
+            """;
+
+        await using var command = context.Postgres.CreateCommand(sql);
+        command.Parameters.AddRange(parameters.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var jobs = new List<IngestionJob>();
+        while (await reader.ReadAsync(cancellationToken))
         {
-            filter &= Builders<IngestionJob>.Filter.Eq(x => x.ScheduleId, scheduleId);
-        }
-        if (!string.IsNullOrWhiteSpace(curveId))
-        {
-            filter &= Builders<IngestionJob>.Filter.Eq(x => x.CurveId, curveId);
+            jobs.Add(new IngestionJob
+            {
+                Id = reader.GetString(0),
+                ScheduleId = reader.GetString(1),
+                CurveId = reader.GetString(2),
+                Status = reader.GetString(3),
+                QueuedAt = reader.GetFieldValue<DateTimeOffset>(4),
+                StartedAt = reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
+                FinishedAt = reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+                Error = reader.GetString(7)
+            });
         }
 
-        return await context.IngestionJobs
-            .Find(filter)
-            .SortByDescending(x => x.QueuedAt)
-            .Limit(500)
-            .ToListAsync(cancellationToken);
+        return jobs;
     }
 
     public async Task<List<IngestionExecution>> GetExecutionsAsync(string? jobId, string? scheduleId, string? curveId, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<IngestionExecution>.Filter.Empty;
-        if (!string.IsNullOrWhiteSpace(jobId))
+        var (where, parameters) = BuildWhere(("job_id", jobId), ("schedule_id", scheduleId), ("curve_id", curveId));
+        var sql = $"""
+            SELECT id, job_id, schedule_id, curve_id, status, created_at, started_at, finished_at, inserted, skipped, error
+            FROM ingestion_executions
+            {where}
+            ORDER BY created_at DESC
+            LIMIT 500
+            """;
+
+        await using var command = context.Postgres.CreateCommand(sql);
+        command.Parameters.AddRange(parameters.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var executions = new List<IngestionExecution>();
+        while (await reader.ReadAsync(cancellationToken))
         {
-            filter &= Builders<IngestionExecution>.Filter.Eq(x => x.JobId, jobId);
-        }
-        if (!string.IsNullOrWhiteSpace(scheduleId))
-        {
-            filter &= Builders<IngestionExecution>.Filter.Eq(x => x.ScheduleId, scheduleId);
-        }
-        if (!string.IsNullOrWhiteSpace(curveId))
-        {
-            filter &= Builders<IngestionExecution>.Filter.Eq(x => x.CurveId, curveId);
+            executions.Add(new IngestionExecution
+            {
+                Id = reader.GetString(0),
+                JobId = reader.GetString(1),
+                ScheduleId = reader.GetString(2),
+                CurveId = reader.GetString(3),
+                Status = reader.GetString(4),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(5),
+                StartedAt = reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+                FinishedAt = reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
+                Inserted = reader.GetInt32(8),
+                Skipped = reader.GetInt32(9),
+                Error = reader.GetString(10)
+            });
         }
 
-        return await context.IngestionExecutions
-            .Find(filter)
-            .SortByDescending(x => x.CreatedAt)
-            .Limit(500)
-            .ToListAsync(cancellationToken);
+        return executions;
     }
 
     public async Task EnsureDefaultSchedulesAsync(IEnumerable<IngestionSchedule> schedules, CancellationToken cancellationToken = default)
     {
         foreach (var schedule in schedules)
         {
-            var existing = await context.IngestionSchedules
-                .Find(x => x.Id == schedule.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (existing is null)
-            {
-                await context.IngestionSchedules.InsertOneAsync(schedule, cancellationToken: cancellationToken);
-                continue;
-            }
-
-            if (existing.CronExpression != "* * * * *")
-            {
-                continue;
-            }
-
-            await context.IngestionSchedules.UpdateOneAsync(
-                Builders<IngestionSchedule>.Filter.Eq(x => x.Id, schedule.Id),
-                Builders<IngestionSchedule>.Update
-                    .Set(x => x.Name, schedule.Name)
-                    .Set(x => x.CurveId, schedule.CurveId)
-                    .Set(x => x.CronExpression, schedule.CronExpression)
-                    .Set(x => x.Endpoint, schedule.Endpoint)
-                    .Set(x => x.Parameters, schedule.Parameters)
-                    .Set(x => x.LookbackHours, schedule.LookbackHours)
-                    .Set(x => x.BatchSize, schedule.BatchSize)
-                    .Set(x => x.UpdatedAt, DateTimeOffset.UtcNow),
-                cancellationToken: cancellationToken);
+            await using var command = context.Postgres.CreateCommand("""
+                INSERT INTO ingestion_schedules (
+                    id, curve_id, name, cron_expression, enabled, endpoint, parameters,
+                    lookback_hours, batch_size, last_queued_at, created_at, updated_at)
+                VALUES (
+                    @id, @curve_id, @name, @cron_expression, @enabled, @endpoint, @parameters,
+                    @lookback_hours, @batch_size, @last_queued_at, @created_at, @updated_at)
+                ON CONFLICT (id) DO UPDATE SET
+                    curve_id = EXCLUDED.curve_id,
+                    name = EXCLUDED.name,
+                    cron_expression = EXCLUDED.cron_expression,
+                    endpoint = EXCLUDED.endpoint,
+                    parameters = EXCLUDED.parameters,
+                    lookback_hours = EXCLUDED.lookback_hours,
+                    batch_size = EXCLUDED.batch_size,
+                    updated_at = EXCLUDED.updated_at
+                WHERE ingestion_schedules.cron_expression = '* * * * *'
+                """);
+            AddScheduleParameters(command, schedule);
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
     public async Task<IngestionJobMessage?> TryCreateQueuedJobAsync(IngestionSchedule schedule, DateTimeOffset queuedAt, CancellationToken cancellationToken = default)
     {
-        var scheduleFilter = Builders<IngestionSchedule>.Filter.Eq(x => x.Id, schedule.Id);
-        scheduleFilter &= schedule.LastQueuedAt.HasValue
-            ? Builders<IngestionSchedule>.Filter.Eq(x => x.LastQueuedAt, schedule.LastQueuedAt.Value)
-            : Builders<IngestionSchedule>.Filter.Eq(x => x.LastQueuedAt, null);
+        await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        var reserved = await context.IngestionSchedules.UpdateOneAsync(
-            scheduleFilter,
-            Builders<IngestionSchedule>.Update.Set(x => x.LastQueuedAt, queuedAt).Set(x => x.UpdatedAt, queuedAt),
-            cancellationToken: cancellationToken);
+        await using var reserve = new NpgsqlCommand("""
+            UPDATE ingestion_schedules
+            SET last_queued_at = @queued_at, updated_at = @queued_at
+            WHERE id = @id AND last_queued_at IS NOT DISTINCT FROM @last_queued_at
+            """, connection, transaction);
+        reserve.Parameters.AddWithValue("queued_at", queuedAt);
+        reserve.Parameters.AddWithValue("id", schedule.Id);
+        reserve.Parameters.AddWithValue("last_queued_at", DbValue.From(schedule.LastQueuedAt));
 
-        if (reserved.ModifiedCount == 0)
+        if (await reserve.ExecuteNonQueryAsync(cancellationToken) == 0)
         {
+            await transaction.RollbackAsync(cancellationToken);
             return null;
         }
 
         var job = new IngestionJob
         {
-            Id = ObjectId.GenerateNewId().ToString(),
+            Id = Guid.NewGuid().ToString("N"),
             ScheduleId = schedule.Id,
             CurveId = schedule.CurveId,
             Status = IngestionStatuses.Queued,
@@ -127,7 +153,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         };
         var execution = new IngestionExecution
         {
-            Id = ObjectId.GenerateNewId().ToString(),
+            Id = Guid.NewGuid().ToString("N"),
             JobId = job.Id,
             ScheduleId = schedule.Id,
             CurveId = schedule.CurveId,
@@ -135,8 +161,9 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             CreatedAt = queuedAt
         };
 
-        await context.IngestionJobs.InsertOneAsync(job, cancellationToken: cancellationToken);
-        await context.IngestionExecutions.InsertOneAsync(execution, cancellationToken: cancellationToken);
+        await InsertJobAsync(connection, transaction, job, cancellationToken);
+        await InsertExecutionAsync(connection, transaction, execution, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return new IngestionJobMessage
         {
@@ -154,49 +181,148 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
     public async Task MarkJobRunningAsync(string jobId, string executionId, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
-        await context.IngestionJobs.UpdateOneAsync(
-            x => x.Id == jobId,
-            Builders<IngestionJob>.Update.Set(x => x.Status, IngestionStatuses.Running).Set(x => x.StartedAt, now),
-            cancellationToken: cancellationToken);
-        await context.IngestionExecutions.UpdateOneAsync(
-            x => x.Id == executionId,
-            Builders<IngestionExecution>.Update.Set(x => x.Status, IngestionStatuses.Running).Set(x => x.StartedAt, now),
-            cancellationToken: cancellationToken);
+        await ExecuteAsync("""
+            UPDATE ingestion_jobs SET status = @status, started_at = @now WHERE id = @job_id;
+            UPDATE ingestion_executions SET status = @status, started_at = @now WHERE id = @execution_id;
+            """, cancellationToken, ("status", IngestionStatuses.Running), ("now", now), ("job_id", jobId), ("execution_id", executionId));
     }
 
     public async Task MarkJobCompletedAsync(string jobId, string executionId, int inserted, int skipped, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
-        await context.IngestionJobs.UpdateOneAsync(
-            x => x.Id == jobId,
-            Builders<IngestionJob>.Update.Set(x => x.Status, IngestionStatuses.Completed).Set(x => x.FinishedAt, now),
-            cancellationToken: cancellationToken);
-        await context.IngestionExecutions.UpdateOneAsync(
-            x => x.Id == executionId,
-            Builders<IngestionExecution>.Update
-                .Set(x => x.Status, IngestionStatuses.Completed)
-                .Set(x => x.FinishedAt, now)
-                .Set(x => x.Inserted, inserted)
-                .Set(x => x.Skipped, skipped),
-            cancellationToken: cancellationToken);
+        await ExecuteAsync("""
+            UPDATE ingestion_jobs SET status = @status, finished_at = @now WHERE id = @job_id;
+            UPDATE ingestion_executions
+            SET status = @status, finished_at = @now, inserted = @inserted, skipped = @skipped
+            WHERE id = @execution_id;
+            """, cancellationToken, ("status", IngestionStatuses.Completed), ("now", now), ("job_id", jobId), ("execution_id", executionId), ("inserted", inserted), ("skipped", skipped));
     }
 
     public async Task MarkJobFailedAsync(string jobId, string executionId, string error, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
-        await context.IngestionJobs.UpdateOneAsync(
-            x => x.Id == jobId,
-            Builders<IngestionJob>.Update
-                .Set(x => x.Status, IngestionStatuses.Failed)
-                .Set(x => x.FinishedAt, now)
-                .Set(x => x.Error, error),
-            cancellationToken: cancellationToken);
-        await context.IngestionExecutions.UpdateOneAsync(
-            x => x.Id == executionId,
-            Builders<IngestionExecution>.Update
-                .Set(x => x.Status, IngestionStatuses.Failed)
-                .Set(x => x.FinishedAt, now)
-                .Set(x => x.Error, error),
-            cancellationToken: cancellationToken);
+        await ExecuteAsync("""
+            UPDATE ingestion_jobs SET status = @status, finished_at = @now, error = @error WHERE id = @job_id;
+            UPDATE ingestion_executions SET status = @status, finished_at = @now, error = @error WHERE id = @execution_id;
+            """, cancellationToken, ("status", IngestionStatuses.Failed), ("now", now), ("error", error), ("job_id", jobId), ("execution_id", executionId));
+    }
+
+    private async Task<List<IngestionSchedule>> QuerySchedulesAsync(string suffix, List<NpgsqlParameter> parameters, CancellationToken cancellationToken)
+    {
+        var sql = $"""
+            SELECT id, curve_id, name, cron_expression, enabled, endpoint, parameters,
+                   lookback_hours, batch_size, last_queued_at, created_at, updated_at
+            FROM ingestion_schedules
+            {suffix}
+            """;
+
+        await using var command = context.Postgres.CreateCommand(sql);
+        command.Parameters.AddRange(parameters.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var schedules = new List<IngestionSchedule>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            schedules.Add(new IngestionSchedule
+            {
+                Id = reader.GetString(0),
+                CurveId = reader.GetString(1),
+                Name = reader.GetString(2),
+                CronExpression = reader.GetString(3),
+                Enabled = reader.GetBoolean(4),
+                Endpoint = reader.GetString(5),
+                Parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(6)) ?? [],
+                LookbackHours = reader.GetInt32(7),
+                BatchSize = reader.GetInt32(8),
+                LastQueuedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(11)
+            });
+        }
+
+        return schedules;
+    }
+
+    private static (string Where, List<NpgsqlParameter> Parameters) BuildWhere(params (string Name, string? Value)[] filters)
+    {
+        var clauses = new List<string>();
+        var parameters = new List<NpgsqlParameter>();
+
+        foreach (var (name, value) in filters)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            clauses.Add($"{name} = @{name}");
+            parameters.Add(new NpgsqlParameter(name, value));
+        }
+
+        return (clauses.Count == 0 ? "" : $"WHERE {string.Join(" AND ", clauses)}", parameters);
+    }
+
+    private static void AddScheduleParameters(NpgsqlCommand command, IngestionSchedule schedule)
+    {
+        command.Parameters.AddWithValue("id", schedule.Id);
+        command.Parameters.AddWithValue("curve_id", schedule.CurveId);
+        command.Parameters.AddWithValue("name", schedule.Name);
+        command.Parameters.AddWithValue("cron_expression", schedule.CronExpression);
+        command.Parameters.AddWithValue("enabled", schedule.Enabled);
+        command.Parameters.AddWithValue("endpoint", schedule.Endpoint);
+        command.Parameters.Add(new NpgsqlParameter("parameters", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(schedule.Parameters) });
+        command.Parameters.AddWithValue("lookback_hours", schedule.LookbackHours);
+        command.Parameters.AddWithValue("batch_size", schedule.BatchSize);
+        command.Parameters.AddWithValue("last_queued_at", DbValue.From(schedule.LastQueuedAt));
+        command.Parameters.AddWithValue("created_at", schedule.CreatedAt);
+        command.Parameters.AddWithValue("updated_at", schedule.UpdatedAt);
+    }
+
+    private static async Task InsertJobAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, IngestionJob job, CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO ingestion_jobs (id, schedule_id, curve_id, status, queued_at, started_at, finished_at, error)
+            VALUES (@id, @schedule_id, @curve_id, @status, @queued_at, @started_at, @finished_at, @error)
+            """, connection, transaction);
+        command.Parameters.AddWithValue("id", job.Id);
+        command.Parameters.AddWithValue("schedule_id", job.ScheduleId);
+        command.Parameters.AddWithValue("curve_id", job.CurveId);
+        command.Parameters.AddWithValue("status", job.Status);
+        command.Parameters.AddWithValue("queued_at", job.QueuedAt);
+        command.Parameters.AddWithValue("started_at", DbValue.From(job.StartedAt));
+        command.Parameters.AddWithValue("finished_at", DbValue.From(job.FinishedAt));
+        command.Parameters.AddWithValue("error", job.Error);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task InsertExecutionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, IngestionExecution execution, CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO ingestion_executions (id, job_id, schedule_id, curve_id, status, created_at, started_at, finished_at, inserted, skipped, error)
+            VALUES (@id, @job_id, @schedule_id, @curve_id, @status, @created_at, @started_at, @finished_at, @inserted, @skipped, @error)
+            """, connection, transaction);
+        command.Parameters.AddWithValue("id", execution.Id);
+        command.Parameters.AddWithValue("job_id", execution.JobId);
+        command.Parameters.AddWithValue("schedule_id", execution.ScheduleId);
+        command.Parameters.AddWithValue("curve_id", execution.CurveId);
+        command.Parameters.AddWithValue("status", execution.Status);
+        command.Parameters.AddWithValue("created_at", execution.CreatedAt);
+        command.Parameters.AddWithValue("started_at", DbValue.From(execution.StartedAt));
+        command.Parameters.AddWithValue("finished_at", DbValue.From(execution.FinishedAt));
+        command.Parameters.AddWithValue("inserted", execution.Inserted);
+        command.Parameters.AddWithValue("skipped", execution.Skipped);
+        command.Parameters.AddWithValue("error", execution.Error);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task ExecuteAsync(string sql, CancellationToken cancellationToken, params (string Name, object Value)[] parameters)
+    {
+        await using var command = context.Postgres.CreateCommand(sql);
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

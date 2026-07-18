@@ -2,7 +2,6 @@ namespace EcoAssetHub.Domain.Entities;
 
 public class IngestionExecution
 {
-    [BsonId]
     public string Id { get; set; } = string.Empty;
 
     public string JobId { get; set; } = string.Empty;

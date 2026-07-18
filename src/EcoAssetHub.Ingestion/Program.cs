@@ -10,14 +10,14 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.Configure<IngestionOptions>(builder.Configuration.GetSection("Ingestion"));
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
-builder.Services.AddScoped<EcoAssetHubContext>(sp =>
+builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    var connectionString = configuration["DatabaseSettings:ConnectionString"] ?? throw new InvalidOperationException("Connection string is not configured.");
-    var databaseName = configuration["DatabaseSettings:DatabaseName"] ?? throw new InvalidOperationException("Database name is not configured.");
-    return new EcoAssetHubContext(connectionString, databaseName);
+    var postgres = configuration.GetConnectionString("Postgres") ?? throw new InvalidOperationException("Postgres connection string is not configured.");
+    return new EcoAssetHubContext(postgres, null);
 });
 builder.Services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
+builder.Services.AddScoped<IDatasetRepository, DatasetRepository>();
 builder.Services.AddHttpClient<EnergyChartsClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["EnergyCharts:BaseUrl"] ?? "https://api.energy-charts.info/");
@@ -67,7 +67,7 @@ static async Task InitializeAsync(IServiceProvider services)
         try
         {
             using var scope = services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsureIndexesAsync();
+            await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsurePostgresSchemaAsync();
             return;
         }
         catch when (attempt < 12)

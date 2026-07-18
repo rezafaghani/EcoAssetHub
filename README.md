@@ -1,6 +1,6 @@
 # EcoAssetHub
 
-EcoAssetHub is a renewable-energy data platform for collecting, storing, querying, and visualizing Energy Charts time-series data. It combines .NET services, MongoDB persistence, RabbitMQ-based ingestion workers, and a React/Vite UI for dataset exploration and ingestion monitoring.
+EcoAssetHub is a renewable-energy data platform for collecting, storing, querying, and visualizing Energy Charts time-series data. It combines .NET services, PostgreSQL scheduling state, ClickHouse time-series persistence, RabbitMQ-based ingestion workers, and a React/Vite UI for dataset exploration and ingestion monitoring.
 
 ## What It Does
 
@@ -13,8 +13,8 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 
 - Backend: .NET 10
 - UI: React 19 + Vite
-- Data: MongoDB 7
-- Messaging: RabbitMQ 3 Management
+- Data: PostgreSQL 17 + ClickHouse 25.3
+- Messaging: RabbitMQ 4 Management
 - Tests: xUnit and Vitest
 - Containers: Dockerfiles plus `docker-compose.yml`, usable with Podman Compose or Docker Compose
 
@@ -27,7 +27,8 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 | `insert` | Insert API plus gRPC ingestion endpoint | `5101`, `5103` |
 | `scheduler` | Queues ingestion jobs on schedule | internal |
 | `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
-| `mongo` | MongoDB database | `27017` |
+| `postgres` | Scheduling, jobs, executions, and assets | `5432` |
+| `clickhouse` | Ingested time-series data | `8123`, `9000` |
 | `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
 
 ## Curve-Scoped Ingestion
@@ -103,7 +104,8 @@ cd src/EcoAssetHub.Client && npm test
 
 ## Notes
 
-- Compose uses database name `centrica` and MongoDB connection string `mongodb://mongo:27017`.
+- Compose uses database name `ecoassethub` for PostgreSQL and ClickHouse.
+- Copy `.env.example` to `.env` and set the passwords before running compose.
 - The UI container installs npm 12 in its Node 24 build image before running `npm ci`.
 - Existing dataset metadata created before curve scoping may need re-ingestion/upsert to populate `CurveId`.
 - Current .NET builds may report NuGet audit warnings for transitive package vulnerabilities; treat those separately from compile errors.

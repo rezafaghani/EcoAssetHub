@@ -1,13 +1,35 @@
 services:
-  mongo:
-    image: mongo:7
+  postgres:
+    image: postgres:17
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ecoassethub}
+      POSTGRES_USER: ${POSTGRES_USER:-ecoasset}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - "27017:27017"
+      - "5432:5432"
     volumes:
-      - mongo-data:/data/db
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ecoassethub}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user \"$${CLICKHOUSE_USER}\" --password \"$${CLICKHOUSE_PASSWORD}\" --query 'SELECT 1'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -15,6 +37,9 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -29,13 +54,15 @@ services:
       context: .
       dockerfile: src/EcoAssetHub.API/Dockerfile
     environment:
-      DatabaseSettings__ConnectionString: mongodb://mongo:27017
-      DatabaseSettings__DatabaseName: centrica
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
     ports:
       - "5100:8080"
     restart: unless-stopped
     depends_on:
-      mongo:
+      postgres:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
 
   insert:
@@ -43,14 +70,13 @@ services:
       context: .
       dockerfile: src/EcoAssetHub.Insert/Dockerfile
     environment:
-      DatabaseSettings__ConnectionString: mongodb://mongo:27017
-      DatabaseSettings__DatabaseName: centrica
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
     ports:
       - "5101:8080"
       - "5103:8081"
     restart: unless-stopped
     depends_on:
-      mongo:
+      clickhouse:
         condition: service_healthy
 
   scheduler:
@@ -58,17 +84,16 @@ services:
       context: .
       dockerfile: src/EcoAssetHub.Scheduler/Dockerfile
     environment:
-      DatabaseSettings__ConnectionString: mongodb://mongo:27017
-      DatabaseSettings__DatabaseName: centrica
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__UserName: guest
-      RabbitMq__Password: guest
+      RabbitMq__UserName: ${RABBITMQ_USER:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
       Scheduler__PollingSeconds: 10
     restart: unless-stopped
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -78,13 +103,16 @@ services:
       context: .
       dockerfile: src/EcoAssetHub.Ingestion/Dockerfile
     environment:
-      DatabaseSettings__ConnectionString: mongodb://mongo:27017
-      DatabaseSettings__DatabaseName: centrica
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       InsertApi__GrpcUrl: http://insert:8081
+      InsertApi__TokenEndpoint: ${INSERT_API_TOKEN_ENDPOINT:-}
+      InsertApi__ClientId: ${INSERT_API_CLIENT_ID:-}
+      InsertApi__ClientSecret: ${INSERT_API_CLIENT_SECRET:-}
+      InsertApi__Scope: ${INSERT_API_SCOPE:-ecoassethub.insert.write}
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__UserName: guest
-      RabbitMq__Password: guest
+      RabbitMq__UserName: ${RABBITMQ_USER:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
       Ingestion__LookbackHours: 48
       Ingestion__BatchSize: 500
@@ -95,7 +123,7 @@ services:
     depends_on:
       insert:
         condition: service_started
-      mongo:
+      postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -112,4 +140,5 @@ services:
         condition: service_started
 
 volumes:
-  mongo-data:
+  postgres-data:
+  clickhouse-data:

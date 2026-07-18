@@ -1,42 +1,46 @@
 ﻿using EcoAssetHub.Domain.Exceptions;
 using EcoAssetHub.Domain.Models;
+using Npgsql;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
 public class SolarPanelRepository(EcoAssetHubContext context) : ISolarPanelRepository
 {
-    public async Task<List<SolarPanel>> GetAllAsync(RenewableFilter searchFilter)
-    {
-        var filter = Builders<SolarPanel>.Filter.Eq(asset => asset.Type, searchFilter.Type);
+    private readonly RenewableAssetRepository _assets = new(context);
 
-        return await context.RenewableAssets.OfType<SolarPanel>().Find(filter).ToListAsync();
+    public Task<List<SolarPanel>> GetAllAsync(RenewableFilter searchFilter)
+    {
+        return _assets.GetByTypeAsync(RenewableAssetType.SolarPanel, reader =>
+        {
+            var panel = new SolarPanel(reader.GetDecimal(3), reader.GetInt64(4), reader.GetString(7))
+            {
+                Id = reader.GetString(0),
+                Name = reader.GetString(2)
+            };
+            return panel;
+        });
     }
 
     public async Task<SolarPanel?> GetAsync(string id)
     {
-        var filter = Builders<SolarPanel>.Filter.Eq(asset => asset.Id, id);
-        return await context.RenewableAssets.OfType<SolarPanel>().Find(filter).FirstOrDefaultAsync();
+        return await _assets.GetAsync(id) as SolarPanel;
     }
 
     public async Task<string> CreateAsync(SolarPanel newObj, CancellationToken cancellationToken = default)
     {
         try
         {
-            await context.RenewableAssets.InsertOneAsync(newObj, cancellationToken: cancellationToken);
-            return newObj.Id; // Returns the inserted object id
+            await _assets.InsertAsync(newObj, cancellationToken);
+            return newObj.Id;
         }
-        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // Enhanced error handling
-            var errorMessage =
-                $"A duplicate key error occurred when inserting a new object. MeterPointId: {newObj.MeterPointId} is duplicated.";
-            throw new DomainException(errorMessage, ex);
+            throw new DomainException($"MeterPointId: {newObj.MeterPointId} is duplicated.", ex);
         }
     }
 
-    public async Task UpdateAsync(SolarPanel updatedObject, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(SolarPanel updatedObject, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, updatedObject.Id);
-        await context.RenewableAssets.ReplaceOneAsync(filter, updatedObject, cancellationToken: cancellationToken);
+        return _assets.UpdateAsync(updatedObject, cancellationToken);
     }
 }

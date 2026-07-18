@@ -2,7 +2,6 @@ namespace EcoAssetHub.Domain.Entities;
 
 public class IngestionSchedule
 {
-    [BsonId]
     public string Id { get; set; } = string.Empty;
 
     public string CurveId { get; set; } = string.Empty;

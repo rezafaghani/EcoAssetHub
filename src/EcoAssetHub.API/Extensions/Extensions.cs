@@ -9,16 +9,16 @@ internal static class Extensions
     {
         var services = builder.Services;
 
-        builder.Services.AddScoped<EcoAssetHubContext>(sp =>
+        builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
         {
             var configuration = sp.GetService<IConfiguration>();
             if (configuration == null)
             {
                 throw new InvalidOperationException("Configuration is not available.");
             }
-            var connectionString = configuration["DatabaseSettings:ConnectionString"]??throw new InvalidOperationException("Connection string is not configured.");
-            var databaseName = configuration["DatabaseSettings:DatabaseName"]??throw new InvalidOperationException("Database name is not configured.");
-            return new EcoAssetHubContext(connectionString, databaseName);
+            var postgres = configuration.GetConnectionString("Postgres") ?? throw new InvalidOperationException("Postgres connection string is not configured.");
+            var clickHouse = configuration.GetConnectionString("ClickHouse") ?? throw new InvalidOperationException("ClickHouse connection string is not configured.");
+            return new EcoAssetHubContext(postgres, clickHouse);
         });
         services.AddScoped<IRenewableAssetRepository, RenewableAssetRepository>();
         services.AddScoped<IWindTurbineRepository, WindTurbineRepository>();

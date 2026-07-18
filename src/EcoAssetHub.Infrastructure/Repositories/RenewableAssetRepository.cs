@@ -1,6 +1,6 @@
-﻿using EcoAssetHub.Domain.Models;
-using MongoDB.Bson;
 using System.Data;
+using EcoAssetHub.Domain.Models;
+using Npgsql;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
@@ -8,108 +8,190 @@ public class RenewableAssetRepository(EcoAssetHubContext context) : IRenewableAs
 {
     public async Task<List<RenewableAssetDto>> GetAllAsync()
     {
-        var resultList = new List<RenewableAssetDto>();
-        var documents= await context.RenewableAssets.Find(_ => true).ToListAsync();
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT id, type, capacity, meter_point_id, hub_height, rotor_diameter, compass_orientation
+            FROM renewable_assets
+            ORDER BY meter_point_id
+            """);
+        await using var reader = await command.ExecuteReaderAsync();
 
-        foreach (var doc in documents)
+        var result = new List<RenewableAssetDto>();
+        while (await reader.ReadAsync())
         {
-            if (doc is WindTurbine windTurbine)
-            {
-                resultList.Add(new RenewableAssetDto
-                {
-                    Id = windTurbine.Id,
-                    HubHeight= windTurbine.HubHeight,
-                    RotorDiameter=windTurbine.RotorDiameter,
-                    MeterPointId = windTurbine.MeterPointId,
-                    Capacity = windTurbine.Capacity,
-                    Type = RenewableAssetType.WindTurbine
-                });
-            }
-            else if (doc is SolarPanel solarPanel)
-            {
-                resultList.Add(new RenewableAssetDto
-                {
-                    Id = solarPanel.Id,
-                    MeterPointId = solarPanel.MeterPointId,
-                    Capacity = solarPanel.Capacity,
-                    CompassOrientation = solarPanel.CompassOrientation,
-                    Type = RenewableAssetType.SolarPanel
-                });
-            }
-            else
-            {
-                resultList.Add(new RenewableAssetDto
-                {
-                    Id = doc.Id,
-                    Capacity = doc.Capacity,
-                    Type = RenewableAssetType.RenewableAsset,
-                    MeterPointId = doc.MeterPointId
-                });
-            }
+            result.Add(ToDto(reader));
         }
 
-        return resultList;
+        return result;
     }
 
     public async Task<RenewableAsset?> GetByMeterPointIdAsync(long id)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.MeterPointId, id);
-        return await context.RenewableAssets.Find(filter).FirstOrDefaultAsync();
+        return await GetAssetAsync("meter_point_id = @meter_point_id", ("meter_point_id", id));
     }
 
     public async Task<string> CreateAsync(RenewableAsset newObj, CancellationToken cancellationToken = default)
     {
         try
         {
-            await context.RenewableAssets.InsertOneAsync(newObj, cancellationToken: cancellationToken);
-            return newObj.Id; // Returns the inserted object id
+            await InsertAsync(newObj, cancellationToken);
+            return newObj.Id;
         }
-        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // Enhanced error handling
-            var errorMessage = $"A duplicate key error occurred when inserting a new object. MeterPointId: {newObj.MeterPointId} is duplicated.";
-            throw new DuplicateNameException(errorMessage, ex);
+            throw new DuplicateNameException($"MeterPointId: {newObj.MeterPointId} is duplicated.", ex);
         }
-
     }
 
     public async Task RemoveAsync(string id)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, id);
-        await context.RenewableAssets.DeleteOneAsync(filter);
+        await using var command = context.Postgres.CreateCommand("DELETE FROM renewable_assets WHERE id = @id");
+        command.Parameters.AddWithValue("id", id);
+        await command.ExecuteNonQueryAsync();
     }
 
     public async Task<RenewableAsset?> GetAsync(string id)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, id);
-        return await context.RenewableAssets.Find(filter).FirstOrDefaultAsync();
+        return await GetAssetAsync("id = @id", ("id", id));
     }
 
     public async Task<List<CurveDto>> SearchCurvesAsync(string? search, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<RenewableAsset>.Filter.Empty;
+        var sql = """
+            SELECT id, type, name, capacity, meter_point_id
+            FROM renewable_assets
+            """;
+
+        await using var command = context.Postgres.CreateCommand();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var trimmed = search.Trim();
-            filter = Builders<RenewableAsset>.Filter.Regex(x => x.Name, new BsonRegularExpression(trimmed, "i"));
-            if (long.TryParse(trimmed, out var meterPointId))
+            sql += " WHERE name ILIKE @search";
+            command.Parameters.AddWithValue("search", $"%{search.Trim()}%");
+            if (long.TryParse(search.Trim(), out var meterPointId))
             {
-                filter |= Builders<RenewableAsset>.Filter.Eq(x => x.MeterPointId, meterPointId);
+                sql += " OR meter_point_id = @meter_point_id";
+                command.Parameters.AddWithValue("meter_point_id", meterPointId);
             }
         }
 
-        var documents = await context.RenewableAssets
-            .Find(filter)
-            .Limit(25)
-            .ToListAsync(cancellationToken);
+        command.CommandText = $"{sql} ORDER BY meter_point_id LIMIT 25";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-        return documents.Select(x => new CurveDto
+        var result = new List<CurveDto>();
+        while (await reader.ReadAsync(cancellationToken))
         {
-            Id = x.Id,
-            Name = string.IsNullOrWhiteSpace(x.Name) ? x.MeterPointId.ToString() : x.Name,
-            MeterPointId = x.MeterPointId,
-            Capacity = x.Capacity,
-            Type = x.Type
-        }).ToList();
+            result.Add(new CurveDto
+            {
+                Id = reader.GetString(0),
+                Type = (RenewableAssetType)reader.GetInt32(1),
+                Name = reader.GetString(2),
+                Capacity = reader.GetDecimal(3),
+                MeterPointId = reader.GetInt64(4)
+            });
+        }
+
+        return result;
+    }
+
+    internal async Task InsertAsync(RenewableAsset asset, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            INSERT INTO renewable_assets (
+                id, type, name, capacity, meter_point_id, hub_height, rotor_diameter, compass_orientation)
+            VALUES (
+                @id, @type, @name, @capacity, @meter_point_id, @hub_height, @rotor_diameter, @compass_orientation)
+            """);
+        AddAssetParameters(command, asset);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    internal async Task UpdateAsync(RenewableAsset asset, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            UPDATE renewable_assets
+            SET name = @name,
+                capacity = @capacity,
+                meter_point_id = @meter_point_id,
+                hub_height = @hub_height,
+                rotor_diameter = @rotor_diameter,
+                compass_orientation = @compass_orientation
+            WHERE id = @id
+            """);
+        AddAssetParameters(command, asset);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    internal async Task<List<T>> GetByTypeAsync<T>(RenewableAssetType type, Func<NpgsqlDataReader, T> map)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT id, type, name, capacity, meter_point_id, hub_height, rotor_diameter, compass_orientation
+            FROM renewable_assets
+            WHERE type = @type
+            ORDER BY meter_point_id
+            """);
+        command.Parameters.AddWithValue("type", (int)type);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        var result = new List<T>();
+        while (await reader.ReadAsync())
+        {
+            result.Add(map(reader));
+        }
+
+        return result;
+    }
+
+    private async Task<RenewableAsset?> GetAssetAsync(string where, params (string Name, object Value)[] parameters)
+    {
+        await using var command = context.Postgres.CreateCommand($"""
+            SELECT id, type, name, capacity, meter_point_id, hub_height, rotor_diameter, compass_orientation
+            FROM renewable_assets
+            WHERE {where}
+            LIMIT 1
+            """);
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ToAsset(reader) : null;
+    }
+
+    private static void AddAssetParameters(NpgsqlCommand command, RenewableAsset asset)
+    {
+        command.Parameters.AddWithValue("id", asset.Id);
+        command.Parameters.AddWithValue("type", (int)asset.Type);
+        command.Parameters.AddWithValue("name", asset.Name);
+        command.Parameters.AddWithValue("capacity", asset.Capacity);
+        command.Parameters.AddWithValue("meter_point_id", asset.MeterPointId);
+        command.Parameters.AddWithValue("hub_height", DbValue.From((asset as WindTurbine)?.HubHeight));
+        command.Parameters.AddWithValue("rotor_diameter", DbValue.From((asset as WindTurbine)?.RotorDiameter));
+        command.Parameters.AddWithValue("compass_orientation", DbValue.From((asset as SolarPanel)?.CompassOrientation));
+    }
+
+    private static RenewableAssetDto ToDto(NpgsqlDataReader reader) => new()
+    {
+        Id = reader.GetString(0),
+        Type = (RenewableAssetType)reader.GetInt32(1),
+        Capacity = reader.GetDecimal(2),
+        MeterPointId = reader.GetInt64(3),
+        HubHeight = reader.IsDBNull(4) ? null : reader.GetDecimal(4),
+        RotorDiameter = reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+        CompassOrientation = reader.IsDBNull(6) ? null : reader.GetString(6)
+    };
+
+    private static RenewableAsset ToAsset(NpgsqlDataReader reader)
+    {
+        var type = (RenewableAssetType)reader.GetInt32(1);
+        var asset = type switch
+        {
+            RenewableAssetType.WindTurbine => new WindTurbine(reader.GetDecimal(3), reader.GetInt64(4), reader.GetDecimal(5), reader.GetDecimal(6)),
+            RenewableAssetType.SolarPanel => new SolarPanel(reader.GetDecimal(3), reader.GetInt64(4), reader.GetString(7)),
+            _ => new RenewableAsset(type, reader.GetDecimal(3), reader.GetInt64(4))
+        };
+
+        asset.Id = reader.GetString(0);
+        asset.Name = reader.GetString(2);
+        return asset;
     }
 }

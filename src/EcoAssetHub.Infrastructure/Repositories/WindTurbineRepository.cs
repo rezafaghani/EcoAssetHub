@@ -1,48 +1,51 @@
 ﻿using EcoAssetHub.Domain.Exceptions;
 using EcoAssetHub.Domain.Models;
+using Npgsql;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
 public class WindTurbineRepository(EcoAssetHubContext context) : IWindTurbineRepository
 {
-    public async Task<List<WindTurbine>> GetAllAsync(RenewableFilter searchFilter)
-    {
-        var filter = Builders<WindTurbine>.Filter.Eq(asset => asset.Type, searchFilter.Type);
+    private readonly RenewableAssetRepository _assets = new(context);
 
-        return await context.RenewableAssets.OfType<WindTurbine>().Find(filter).ToListAsync();
+    public Task<List<WindTurbine>> GetAllAsync(RenewableFilter searchFilter)
+    {
+        return _assets.GetByTypeAsync(RenewableAssetType.WindTurbine, reader =>
+        {
+            var turbine = new WindTurbine(reader.GetDecimal(3), reader.GetInt64(4), reader.GetDecimal(5), reader.GetDecimal(6))
+            {
+                Id = reader.GetString(0),
+                Name = reader.GetString(2)
+            };
+            return turbine;
+        });
     }
 
     public async Task<WindTurbine?> GetAsync(string id)
     {
-        var filter = Builders<WindTurbine>.Filter.Eq(asset => asset.Id, id);
-        return await context.RenewableAssets.OfType<WindTurbine>().Find(filter).FirstOrDefaultAsync();
+        return await _assets.GetAsync(id) as WindTurbine;
     }
 
     public async Task<string> CreateAsync(WindTurbine newObj, CancellationToken cancellationToken = default)
     {
         try
         {
-            await context.RenewableAssets.InsertOneAsync(newObj, cancellationToken: cancellationToken);
-            return newObj.Id; // Returns the inserted object id
+            await _assets.InsertAsync(newObj, cancellationToken);
+            return newObj.Id;
         }
-        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // Enhanced error handling
-            var errorMessage =
-                $"A duplicate key error occurred when inserting a new object. MeterPointId: {newObj.MeterPointId} is duplicated.";
-            throw new DomainException(errorMessage, ex);
+            throw new DomainException($"MeterPointId: {newObj.MeterPointId} is duplicated.", ex);
         }
     }
 
-    public async Task UpdateAsync(WindTurbine updatedObject, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(WindTurbine updatedObject, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, updatedObject.Id);
-        await context.RenewableAssets.ReplaceOneAsync(filter, updatedObject, cancellationToken: cancellationToken);
+        return _assets.UpdateAsync(updatedObject, cancellationToken);
     }
 
-    public async Task RemoveAsync(string id)
+    public Task RemoveAsync(string id)
     {
-        var filter = Builders<RenewableAsset>.Filter.Eq(asset => asset.Id, id);
-        await context.RenewableAssets.DeleteOneAsync(filter);
+        return _assets.RemoveAsync(id);
     }
 }
