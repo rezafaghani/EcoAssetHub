@@ -1,5 +1,7 @@
+using System.Text.Json;
 using EcoAssetHub.Domain.Models;
-using MongoDB.Bson;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace EcoAssetHub.Infrastructure.Repositories;
 
@@ -17,65 +19,118 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
 
         metadata.LastIngestedAt = now;
 
-        var entity = ToEntity(metadata);
-        await context.EnergyDatasets.ReplaceOneAsync(
-            x => x.Id == entity.Id,
-            entity,
-            new ReplaceOptions { IsUpsert = true },
-            cancellationToken);
+        await using var command = context.Postgres.CreateCommand("""
+            INSERT INTO energy_datasets (
+                id, curve_id, source, endpoint, metric, unit, country, bidding_zone, region,
+                granularity, production_type, forecast_type, neighbor, license_info, deprecated,
+                request_parameters, first_observed_at, last_ingested_at)
+            VALUES (
+                @id, @curve_id, @source, @endpoint, @metric, @unit, @country, @bidding_zone, @region,
+                @granularity, @production_type, @forecast_type, @neighbor, @license_info, @deprecated,
+                @request_parameters, @first_observed_at, @last_ingested_at)
+            ON CONFLICT (id) DO UPDATE SET
+                curve_id = EXCLUDED.curve_id,
+                source = EXCLUDED.source,
+                endpoint = EXCLUDED.endpoint,
+                metric = EXCLUDED.metric,
+                unit = EXCLUDED.unit,
+                country = EXCLUDED.country,
+                bidding_zone = EXCLUDED.bidding_zone,
+                region = EXCLUDED.region,
+                granularity = EXCLUDED.granularity,
+                production_type = EXCLUDED.production_type,
+                forecast_type = EXCLUDED.forecast_type,
+                neighbor = EXCLUDED.neighbor,
+                license_info = EXCLUDED.license_info,
+                deprecated = EXCLUDED.deprecated,
+                request_parameters = EXCLUDED.request_parameters,
+                last_ingested_at = EXCLUDED.last_ingested_at
+            """);
+        AddParameters(command, metadata);
+        await command.ExecuteNonQueryAsync(cancellationToken);
 
         return metadata;
     }
 
     public async Task<DatasetMetadataDto?> GetAsync(string id, CancellationToken cancellationToken = default)
     {
-        var entity = await context.EnergyDatasets.Find(x => x.Id == id).FirstOrDefaultAsync(cancellationToken);
-        return entity is null ? null : ToDto(entity);
+        await using var command = context.Postgres.CreateCommand($"""
+            {SelectSql}
+            WHERE id = @id
+            LIMIT 1
+            """);
+        command.Parameters.AddWithValue("id", id);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ToDto(reader) : null;
     }
 
     public async Task<List<DatasetMetadataDto>> SearchAsync(DatasetSearchFilter filter, CancellationToken cancellationToken = default)
     {
-        var builder = Builders<EnergyDataset>.Filter;
-        var mongoFilter = builder.Empty;
+        await using var command = context.Postgres.CreateCommand();
+        var clauses = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(filter.Endpoint))
-            mongoFilter &= builder.Eq(x => x.Endpoint, filter.Endpoint);
-        if (!string.IsNullOrWhiteSpace(filter.CurveId))
-            mongoFilter &= builder.Eq(x => x.CurveId, filter.CurveId);
-        if (!string.IsNullOrWhiteSpace(filter.Metric))
-            mongoFilter &= builder.Eq(x => x.Metric, filter.Metric);
-        if (!string.IsNullOrWhiteSpace(filter.Country))
-            mongoFilter &= builder.Eq(x => x.Country, filter.Country);
-        if (!string.IsNullOrWhiteSpace(filter.BiddingZone))
-            mongoFilter &= builder.Eq(x => x.BiddingZone, filter.BiddingZone);
-        if (!string.IsNullOrWhiteSpace(filter.Region))
-            mongoFilter &= builder.Eq(x => x.Region, filter.Region);
-        if (!string.IsNullOrWhiteSpace(filter.Granularity))
-            mongoFilter &= builder.Eq(x => x.Granularity, filter.Granularity);
+        AddFilter(command, clauses, "endpoint", filter.Endpoint);
+        AddFilter(command, clauses, "curve_id", filter.CurveId);
+        AddFilter(command, clauses, "metric", filter.Metric);
+        AddFilter(command, clauses, "country", filter.Country);
+        AddFilter(command, clauses, "bidding_zone", filter.BiddingZone);
+        AddFilter(command, clauses, "region", filter.Region);
+        AddFilter(command, clauses, "granularity", filter.Granularity);
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = new BsonRegularExpression(filter.Search.Trim(), "i");
-            mongoFilter &= builder.Regex(x => x.Id, search) |
-                           builder.Regex(x => x.CurveId, search) |
-                           builder.Regex(x => x.Endpoint, search) |
-                           builder.Regex(x => x.Metric, search) |
-                           builder.Regex(x => x.Unit, search) |
-                           builder.Regex(x => x.Country, search) |
-                           builder.Regex(x => x.BiddingZone, search) |
-                           builder.Regex(x => x.Region, search) |
-                           builder.Regex(x => x.ProductionType, search) |
-                           builder.Regex(x => x.ForecastType, search) |
-                           builder.Regex(x => x.Neighbor, search);
+            clauses.Add("""
+                (
+                    id ILIKE @search OR
+                    curve_id ILIKE @search OR
+                    endpoint ILIKE @search OR
+                    metric ILIKE @search OR
+                    unit ILIKE @search OR
+                    country ILIKE @search OR
+                    bidding_zone ILIKE @search OR
+                    region ILIKE @search OR
+                    production_type ILIKE @search OR
+                    forecast_type ILIKE @search OR
+                    neighbor ILIKE @search
+                )
+                """);
+            command.Parameters.AddWithValue("search", $"%{filter.Search.Trim()}%");
         }
 
-        var entities = await context.EnergyDatasets
-            .Find(mongoFilter)
-            .SortByDescending(x => x.LastIngestedAt)
-            .Limit(500)
-            .ToListAsync(cancellationToken);
+        command.CommandText = $"""
+            {SelectSql}
+            {(clauses.Count == 0 ? "" : $"WHERE {string.Join(" AND ", clauses)}")}
+            ORDER BY last_ingested_at DESC
+            LIMIT 500
+            """;
 
-        return entities.Select(ToDto).ToList();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<DatasetMetadataDto>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(ToDto(reader));
+        }
+
+        return result;
+    }
+
+    private const string SelectSql = """
+        SELECT id, curve_id, source, endpoint, metric, unit, country, bidding_zone, region,
+               granularity, production_type, forecast_type, neighbor, license_info, deprecated,
+               request_parameters::text, first_observed_at, last_ingested_at
+        FROM energy_datasets
+        """;
+
+    private static void AddFilter(NpgsqlCommand command, List<string> clauses, string column, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        clauses.Add($"{column} = @{column}");
+        command.Parameters.AddWithValue(column, value);
     }
 
     private static string CreateDatasetId(DatasetMetadataDto metadata)
@@ -98,47 +153,47 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
             .Select(x => string.IsNullOrWhiteSpace(x) ? "-" : x.Trim().ToLowerInvariant().Replace(' ', '-')));
     }
 
-    private static EnergyDataset ToEntity(DatasetMetadataDto dto) => new()
+    private static void AddParameters(NpgsqlCommand command, DatasetMetadataDto dto)
     {
-        Id = dto.Id,
-        CurveId = dto.CurveId,
-        Source = dto.Source,
-        Endpoint = dto.Endpoint,
-        Metric = dto.Metric,
-        Unit = dto.Unit,
-        Country = dto.Country,
-        BiddingZone = dto.BiddingZone,
-        Region = dto.Region,
-        Granularity = dto.Granularity,
-        ProductionType = dto.ProductionType,
-        ForecastType = dto.ForecastType,
-        Neighbor = dto.Neighbor,
-        LicenseInfo = dto.LicenseInfo,
-        Deprecated = dto.Deprecated,
-        RequestParameters = dto.RequestParameters,
-        FirstObservedAt = dto.FirstObservedAt,
-        LastIngestedAt = dto.LastIngestedAt
-    };
+        command.Parameters.AddWithValue("id", dto.Id);
+        command.Parameters.AddWithValue("curve_id", dto.CurveId);
+        command.Parameters.AddWithValue("source", dto.Source);
+        command.Parameters.AddWithValue("endpoint", dto.Endpoint);
+        command.Parameters.AddWithValue("metric", dto.Metric);
+        command.Parameters.AddWithValue("unit", dto.Unit);
+        command.Parameters.AddWithValue("country", dto.Country);
+        command.Parameters.AddWithValue("bidding_zone", dto.BiddingZone);
+        command.Parameters.AddWithValue("region", dto.Region);
+        command.Parameters.AddWithValue("granularity", dto.Granularity);
+        command.Parameters.AddWithValue("production_type", dto.ProductionType);
+        command.Parameters.AddWithValue("forecast_type", dto.ForecastType);
+        command.Parameters.AddWithValue("neighbor", dto.Neighbor);
+        command.Parameters.AddWithValue("license_info", dto.LicenseInfo);
+        command.Parameters.AddWithValue("deprecated", dto.Deprecated);
+        command.Parameters.Add(new NpgsqlParameter("request_parameters", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(dto.RequestParameters) });
+        command.Parameters.AddWithValue("first_observed_at", dto.FirstObservedAt);
+        command.Parameters.AddWithValue("last_ingested_at", dto.LastIngestedAt);
+    }
 
-    private static DatasetMetadataDto ToDto(EnergyDataset entity) => new()
+    private static DatasetMetadataDto ToDto(NpgsqlDataReader reader) => new()
     {
-        Id = entity.Id,
-        CurveId = entity.CurveId,
-        Source = entity.Source,
-        Endpoint = entity.Endpoint,
-        Metric = entity.Metric,
-        Unit = entity.Unit,
-        Country = entity.Country,
-        BiddingZone = entity.BiddingZone,
-        Region = entity.Region,
-        Granularity = entity.Granularity,
-        ProductionType = entity.ProductionType,
-        ForecastType = entity.ForecastType,
-        Neighbor = entity.Neighbor,
-        LicenseInfo = entity.LicenseInfo,
-        Deprecated = entity.Deprecated,
-        RequestParameters = entity.RequestParameters,
-        FirstObservedAt = entity.FirstObservedAt,
-        LastIngestedAt = entity.LastIngestedAt
+        Id = reader.GetString(0),
+        CurveId = reader.GetString(1),
+        Source = reader.GetString(2),
+        Endpoint = reader.GetString(3),
+        Metric = reader.GetString(4),
+        Unit = reader.GetString(5),
+        Country = reader.GetString(6),
+        BiddingZone = reader.GetString(7),
+        Region = reader.GetString(8),
+        Granularity = reader.GetString(9),
+        ProductionType = reader.GetString(10),
+        ForecastType = reader.GetString(11),
+        Neighbor = reader.GetString(12),
+        LicenseInfo = reader.GetString(13),
+        Deprecated = reader.GetBoolean(14),
+        RequestParameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(15)) ?? [],
+        FirstObservedAt = reader.GetFieldValue<DateTimeOffset>(16),
+        LastIngestedAt = reader.GetFieldValue<DateTimeOffset>(17)
     };
 }

@@ -2,7 +2,7 @@
 
 public class SolarPanel : RenewableAsset
 {
-    private string _compassOrientation;
+    private string _compassOrientation = string.Empty;
     public string CompassOrientation 
     { 
         get => _compassOrientation;

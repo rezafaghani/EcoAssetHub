@@ -1,12 +1,8 @@
 ﻿namespace EcoAssetHub.Domain.Entities;
 
-[BsonDiscriminator(RootClass = true)]
-[BsonKnownTypes(typeof(SolarPanel), typeof(WindTurbine))]
 public class RenewableAsset
 {
-    [BsonId]
-    [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; private set; }
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     public RenewableAssetType Type { get; private set; } // WindTurbine, SolarPanel, etc.
     public string Name { get; set; } = string.Empty;
@@ -34,8 +30,6 @@ public class RenewableAsset
             _meterPointId = value;
         }
     }
-
-    public List<ObjectId> PowerProductionIds { get; set; }
 
     // Constructor for immutability
     public RenewableAsset(RenewableAssetType type, decimal capacity, long meterPointId)

@@ -16,15 +16,12 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddControllers();
 builder.Services.AddGrpc();
 builder.Services.AddOpenApi();
-builder.Services.AddScoped<EcoAssetHubContext>(sp =>
+builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    var connectionString = configuration["DatabaseSettings:ConnectionString"] ?? throw new InvalidOperationException("Connection string is not configured.");
-    var databaseName = configuration["DatabaseSettings:DatabaseName"] ?? throw new InvalidOperationException("Database name is not configured.");
-    return new EcoAssetHubContext(connectionString, databaseName);
+    var clickHouse = configuration.GetConnectionString("ClickHouse") ?? throw new InvalidOperationException("ClickHouse connection string is not configured.");
+    return new EcoAssetHubContext(null, clickHouse);
 });
-builder.Services.AddScoped<IProductionRepository, ProductionRepository>();
-builder.Services.AddScoped<IDatasetRepository, DatasetRepository>();
 builder.Services.AddScoped<ITimeSeriesRepository, TimeSeriesRepository>();
 
 var authEnabled = builder.Configuration.GetValue("Auth:Enabled", false);
@@ -60,7 +57,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsureIndexesAsync();
+    await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsureClickHouseSchemaAsync();
 }
 
 if (app.Environment.IsDevelopment())

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API including dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; MongoDB repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
+EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API including dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; PostgreSQL and ClickHouse repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
 
 ## Build, Test, and Development Commands
 
@@ -29,4 +29,4 @@ Recent history uses Conventional Commit-style subjects such as `feat: Implement 
 
 ## Security & Configuration Tips
 
-Keep secrets out of `appsettings.json` and client source. Use environment variables for connection strings, API URLs, and credentials. Compose defaults include MongoDB at `mongodb://mongo:27017` and RabbitMQ management on `localhost:15672`; avoid committing local overrides.
+Keep secrets out of `appsettings.json` and client source. Use environment variables for connection strings, API URLs, and credentials. Compose defaults include PostgreSQL on `localhost:5432`, ClickHouse on `localhost:8123`, and RabbitMQ management on `localhost:15672`; avoid committing local overrides.

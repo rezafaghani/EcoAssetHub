@@ -2,8 +2,6 @@ namespace EcoAssetHub.Domain.Entities;
 
 public class EnergyTimeSeriesPoint
 {
-    [BsonId]
-    [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = string.Empty;
 
     public string DatasetId { get; set; } = string.Empty;

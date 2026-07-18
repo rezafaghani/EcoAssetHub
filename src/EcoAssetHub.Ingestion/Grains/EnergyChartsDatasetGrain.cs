@@ -42,7 +42,9 @@ public class EnergyChartsDatasetGrain(
             foreach (var dataset in datasets)
             {
                 dataset.Metadata.CurveId = message.CurveId;
-                var saved = await insertClient.UpsertDatasetAsync(dataset.Metadata, cancellationToken);
+                using var metadataScope = scopeFactory.CreateScope();
+                var metadataRepository = metadataScope.ServiceProvider.GetRequiredService<IDatasetRepository>();
+                var saved = await metadataRepository.UpsertAsync(dataset.Metadata, cancellationToken);
                 dataset.Batch.DatasetId = saved.Id;
                 dataset.Batch.SourceMetadataVersion = saved.LastIngestedAt.ToUnixTimeSeconds().ToString();
 

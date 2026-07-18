@@ -10,12 +10,12 @@ public class DatabaseInitializer
         try
         {
             var context = services.GetRequiredService<EcoAssetHubContext>();
-            await context.EnsureIndexesAsync();
+            await context.EnsureSchemaAsync();
         }
         catch (Exception ex)
         {
             var logger = services.GetRequiredService<ILogger<DatabaseInitializer>>();
-            logger.LogError(ex, "An error occurred while creating database indexes.");
+            logger.LogError(ex, "An error occurred while creating database schema.");
         }
     }
 }

@@ -5,27 +5,7 @@ option csharp_namespace = "EcoAssetHub.Contracts";
 package ecoassethub.ingestion;
 
 service IngestionWrite {
-  rpc UpsertDataset (DatasetMetadataMessage) returns (DatasetMetadataMessage);
   rpc InsertTimeSeriesBatch (TimeSeriesBatchMessage) returns (TimeSeriesInsertResultMessage);
-}
-
-message DatasetMetadataMessage {
-  string id = 1;
-  string source = 2;
-  string endpoint = 3;
-  string metric = 4;
-  string unit = 5;
-  string country = 6;
-  string bidding_zone = 7;
-  string region = 8;
-  string granularity = 9;
-  string production_type = 10;
-  string forecast_type = 11;
-  string neighbor = 12;
-  string license_info = 13;
-  bool deprecated = 14;
-  map<string, string> request_parameters = 15;
-  string curve_id = 16;
 }
 
 message TimeSeriesBatchMessage {
