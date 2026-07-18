@@ -5,6 +5,7 @@ export interface IngestionSchedule {
   cronExpression: string;
   defaultCronExpression: string;
   enabled: boolean;
+  source: string;
   endpoint: string;
   parameters: Record<string, string>;
   lookbackHours: number;
@@ -90,7 +91,7 @@ export function buildScheduleStatusRows(
     return {
       id: schedule.id,
       name: schedule.name || schedule.curveId,
-      detail: `${schedule.endpoint} · ${schedule.cronExpression} · ${schedule.windowStartExpression} -> ${schedule.windowEndExpression}`,
+      detail: `${schedule.source} · ${schedule.endpoint} · ${schedule.cronExpression} · ${schedule.windowStartExpression} -> ${schedule.windowEndExpression}`,
       enabled: schedule.enabled,
       scheduleStatus: schedule.enabled ? 'enabled' : 'disabled',
       displayStatus,
