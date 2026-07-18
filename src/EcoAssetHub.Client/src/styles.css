@@ -296,12 +296,13 @@ select:hover {
 .range-toolbar {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(126px, 1fr)) minmax(76px, auto) minmax(112px, auto);
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) minmax(150px, 0.75fr) minmax(76px, auto) minmax(112px, auto);
   align-items: end;
   gap: var(--space-1);
 }
 
 .range-toolbar input,
+.range-toolbar select,
 .range-toolbar button,
 .live-toggle {
   min-height: 1.9rem;
@@ -315,6 +316,27 @@ select:hover {
 .range-toolbar input {
   padding: 0.24rem var(--space-2);
   font-size: 0.78rem;
+}
+
+.range-toolbar select {
+  padding: 0.24rem var(--space-2);
+  font-size: 0.78rem;
+}
+
+.date-expression {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.25rem;
+  gap: var(--space-1);
+}
+
+.date-expression input[type="datetime-local"] {
+  color: transparent;
+  padding: 0;
+}
+
+.date-expression input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  margin: auto;
 }
 
 .range-toolbar button {

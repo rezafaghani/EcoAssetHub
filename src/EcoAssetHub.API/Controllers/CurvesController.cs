@@ -25,22 +25,28 @@ public class CurvesController(
         [FromQuery] string start,
         [FromQuery] string end,
         [FromQuery] string? asOf,
+        [FromQuery] string? timeZone,
         CancellationToken cancellationToken)
     {
         if (meterPointId <= 0
-            || !DateTimeExpression.TryResolve(start, out var startTime)
-            || !DateTimeExpression.TryResolve(end, out var endTime)
+            || !DateTimeExpression.TryResolve(start, out var startTime, timeZone)
+            || !DateTimeExpression.TryResolve(end, out var endTime, timeZone)
             || startTime > endTime)
         {
             return BadRequest("A valid meterPointId and date range are required.");
         }
 
-        if (!string.IsNullOrWhiteSpace(asOf) && !DateTimeExpression.TryResolve(asOf, out _))
+        DateTimeOffset? versionTime = null;
+        if (!string.IsNullOrWhiteSpace(asOf))
         {
-            return BadRequest("A valid asOf version time is required.");
+            if (!DateTimeExpression.TryResolve(asOf, out var parsedAsOf, timeZone))
+            {
+                return BadRequest("A valid asOf version time is required.");
+            }
+
+            versionTime = parsedAsOf;
         }
 
-        DateTimeOffset? versionTime = string.IsNullOrWhiteSpace(asOf) ? null : DateTimeExpression.Resolve(asOf);
         var points = await productionRepository.GetSeriesAsync(meterPointId, startTime, endTime, versionTime, cancellationToken);
         return Ok(points);
     }

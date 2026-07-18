@@ -34,14 +34,14 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 
 ## Time-Series Reads
 
-Series endpoints accept exact datetimes or simple UTC expressions for `start`, `end`, and `asOf`:
+Series endpoints accept exact datetimes or simple expressions for `start`, `end`, and `asOf`:
 
 ```text
-GET /api/datasets/{datasetId}/series?start=today-1&end=now&asOf=today
-GET /api/curves/{meterPointId}/series?start=2026-07-18T00:00:00Z&end=2026-07-19T00:00:00Z&asOf=now
+GET /api/datasets/{datasetId}/series?start=today-1&end=now&asOf=today&timeZone=UTC
+GET /api/curves/{meterPointId}/series?start=2026-07-18T00:00&end=2026-07-19T00:00&asOf=now&timeZone=Europe/Copenhagen
 ```
 
-Supported expressions are `now`, `today`, `today+N`, `today-N`, `now+Nh`, and `now-Nh`. `asOf` means version time: the API returns the newest value inserted at or before that time. Omit `asOf` for the latest version.
+Supported expressions are `now`, `today`, `today+N`, `today-N`, `now+Nh`, and `now-Nh`. `today` and exact datetimes without an offset use the optional `timeZone` query value; omit it for UTC. `asOf` means version time: the API returns the newest value inserted at or before that time. Omit `asOf` for the latest version.
 
 ## Curve-Scoped Ingestion
 
