@@ -1,8 +1,7 @@
 using EcoAssetHub.Domain.Entities;
-using EcoAssetHub.Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EcoAssetHub.Query.Controllers;
+namespace EcoAssetHub.API.Controllers;
 
 [ApiController]
 [Route("api/ingestion")]

@@ -2,14 +2,14 @@
 
 ## Project Structure & Module Organization
 
-EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API, `EcoAssetHub.Query` serves dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; MongoDB repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
+EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API including dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; MongoDB repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
 
 ## Build, Test, and Development Commands
 
 - `dotnet restore EcoAssetHub.sln`: restore backend dependencies.
 - `dotnet build EcoAssetHub.sln`: compile all .NET projects.
 - `dotnet test EcoAssetHub.sln`: run xUnit backend tests.
-- `dotnet run --project src/EcoAssetHub.Query/EcoAssetHub.Query.csproj`: run the query API locally.
+- `dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj`: run the API locally.
 - `cd src/EcoAssetHub.Client && npm install`: install client dependencies.
 - `cd src/EcoAssetHub.Client && npm start`: start Vite on `127.0.0.1`.
 - `cd src/EcoAssetHub.Client && npm test`: run Vitest.
@@ -17,7 +17,7 @@ EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects liv
 
 ## Coding Style & Naming Conventions
 
-C# projects use nullable reference types and implicit usings. Keep namespaces, folders, and types aligned with existing patterns such as `Repositories/*Repository.cs`, `Controllers/*Controller.cs`, and command/query handler folders. Use PascalCase for C# types and methods, camelCase for locals and parameters. The client `.editorconfig` requires UTF-8, spaces, 2-space indentation, final newlines, and single quotes in TypeScript.
+C# projects use nullable reference types and implicit usings. Keep namespaces, folders, and types aligned with existing patterns such as `Repositories/*Repository.cs`, `Controllers/*Controller.cs`, and request/DTO folders. Use PascalCase for C# types and methods, camelCase for locals and parameters. The client `.editorconfig` requires UTF-8, spaces, 2-space indentation, final newlines, and single quotes in TypeScript.
 
 ## Testing Guidelines
 

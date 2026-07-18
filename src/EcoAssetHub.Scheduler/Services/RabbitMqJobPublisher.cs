@@ -10,42 +10,49 @@ public class RabbitMqJobPublisher(IOptions<RabbitMqOptions> options)
 {
     private readonly RabbitMqOptions _options = options.Value;
 
-    public void Publish(IngestionJobMessage message)
+    public async Task PublishAsync(IngestionJobMessage message, CancellationToken cancellationToken = default)
     {
         for (var attempt = 1; attempt <= 5; attempt++)
         {
             try
             {
-                PublishOnce(message);
+                await PublishOnceAsync(message, cancellationToken);
                 return;
             }
             catch when (attempt < 5)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(2));
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             }
         }
     }
 
-    private void PublishOnce(IngestionJobMessage message)
+    private async Task PublishOnceAsync(IngestionJobMessage message, CancellationToken cancellationToken)
     {
         var factory = new ConnectionFactory
         {
             HostName = _options.HostName,
             Port = _options.Port,
             UserName = _options.UserName,
-            Password = _options.Password,
-            DispatchConsumersAsync = true
+            Password = _options.Password
         };
-        using var connection = factory.CreateConnection();
-        using var channel = connection.CreateModel();
-        channel.QueueDeclare(_options.QueueName, durable: true, exclusive: false, autoDelete: false);
+        await using var connection = await factory.CreateConnectionAsync(cancellationToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        await channel.QueueDeclareAsync(_options.QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
 
         var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
-        var properties = channel.CreateBasicProperties();
-        properties.Persistent = true;
-        properties.MessageId = message.JobId;
-        properties.Type = nameof(IngestionJobMessage);
+        var properties = new BasicProperties
+        {
+            Persistent = true,
+            MessageId = message.JobId,
+            Type = nameof(IngestionJobMessage)
+        };
 
-        channel.BasicPublish(exchange: string.Empty, routingKey: _options.QueueName, basicProperties: properties, body: body);
+        await channel.BasicPublishAsync(
+            exchange: string.Empty,
+            routingKey: _options.QueueName,
+            mandatory: false,
+            basicProperties: properties,
+            body: body,
+            cancellationToken: cancellationToken);
     }
 }

@@ -13,7 +13,7 @@ services:
       retries: 12
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:4-management
     restart: unless-stopped
     ports:
       - "5672:5672"
@@ -48,20 +48,6 @@ services:
     ports:
       - "5101:8080"
       - "5103:8081"
-    restart: unless-stopped
-    depends_on:
-      mongo:
-        condition: service_healthy
-
-  query:
-    build:
-      context: .
-      dockerfile: src/EcoAssetHub.Query/Dockerfile
-    environment:
-      DatabaseSettings__ConnectionString: mongodb://mongo:27017
-      DatabaseSettings__DatabaseName: centrica
-    ports:
-      - "5102:8080"
     restart: unless-stopped
     depends_on:
       mongo:
@@ -122,7 +108,7 @@ services:
       - "8080:80"
     restart: unless-stopped
     depends_on:
-      query:
+      api:
         condition: service_started
 
 volumes:

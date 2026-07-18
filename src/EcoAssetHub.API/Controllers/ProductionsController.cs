@@ -1,13 +1,15 @@
 ﻿using System.Net;
+using EcoAssetHub.API.Infrastructure.Services;
 using EcoAssetHub.API.Application.ProductionCommands.SpotPriceQueries.DailyQueries;
 using EcoAssetHub.API.Application.ProductionCommands.SpotPriceQueries.MonthlyQueries;
+using EcoAssetHub.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EcoAssetHub.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ProductionsController(IMediator mediator) : ControllerBase
+    public class ProductionsController(ICacheService cacheService, IProductionRepository productionRepository) : ControllerBase
     {
         [HttpGet("{meterPointId:long}/SpotPrices", Name = "SpotPricesDaily")]
         [ProducesResponseType(typeof(List<SpotPriceDailyQueryResult>), (int)HttpStatusCode.OK)]
@@ -15,15 +17,26 @@ namespace EcoAssetHub.API.Controllers
         public async Task<IActionResult> SpotPricesDaily([FromRoute] long meterPointId, [FromQuery] string start,
             [FromQuery] string end)
         {
-            var query = new SpotPriceDailyQuery
+            var productionResult = await productionRepository.SpotPricesDaily(new PowerProductionFilter
             {
-                End = DateTime.Parse(end),
+                EndDateTime = DateTime.Parse(end),
                 MeterPointId = meterPointId,
-                Start = DateTime.Parse(start)
-            };
+                StartDateTime = DateTime.Parse(start)
+            });
 
-            var result = await mediator.Send(query);
-            return Ok(result);
+            foreach (var item in productionResult)
+            {
+                var priceOfDay = cacheService.RetrieveByDateTime(item.Start.Date);
+                if (priceOfDay != null)
+                    item.Production *= priceOfDay.Price;
+            }
+
+            return Ok(productionResult.Select(x => new SpotPriceDailyQueryResult
+            {
+                Start = x.Start,
+                End = x.End,
+                Value = $"{x.Production:F2} DKK/kWh"
+            }).ToList());
         }
 
         [HttpGet("SpotPrices",Name = "MonthlySpotPrice")]
@@ -31,8 +44,27 @@ namespace EcoAssetHub.API.Controllers
         [ProducesResponseType((int)HttpStatusCode.BadRequest)]
         public async Task<IActionResult> MonthlySpotPrice([FromQuery] SpotPriceMonthlyQuery query)
         {
-            var result = await mediator.Send(query);
-            return Ok(result);
+            var productionResult = await productionRepository.SpotPriceMonthly(new PowerProductionFilter
+            {
+                StartDateTime = query.Start,
+                EndDateTime = query.End,
+            });
+
+            var priceOfMonth = cacheService.RetrieveDateForMonth(query.Start, query.End);
+            foreach (var data in productionResult)
+            {
+                if (priceOfMonth.TryGetValue(data.Month, out var multiplier))
+                {
+                    data.Production *= multiplier;
+                }
+            }
+
+            return Ok(productionResult.Select(x => new SpotPriceMonthlyQueryResult
+            {
+                Month = x.Month,
+                MeterPointId = x.MeterPointId,
+                Production = $"{x.Production:F2} DKK/kWh"
+            }).ToList());
         }
     }
 }
