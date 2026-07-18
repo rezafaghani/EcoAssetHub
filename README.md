@@ -23,9 +23,8 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 | Service | Purpose | Port |
 | --- | --- | --- |
 | `ui` | React/Vite app served by Nginx | `8080` |
-| `api` | Main HTTP API | `5100` |
+| `api` | Main HTTP API, dataset reads, and time-series reads | `5100` |
 | `insert` | Insert API plus gRPC ingestion endpoint | `5101`, `5103` |
-| `query` | Dataset and time-series query API | `5102` |
 | `scheduler` | Queues ingestion jobs on schedule | internal |
 | `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
 | `mongo` | MongoDB database | `27017` |
@@ -82,7 +81,7 @@ Backend:
 ```bash
 dotnet restore EcoAssetHub.sln
 dotnet build EcoAssetHub.sln
-dotnet run --project src/EcoAssetHub.Query/EcoAssetHub.Query.csproj
+dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj
 ```
 
 Client:
@@ -93,7 +92,7 @@ npm install
 npm start
 ```
 
-The client expects Node `>=24.18.0 <27` and npm `>=12 <13`. Set `VITE_API_BASE_URL` if the query API is not available through `/api`.
+The client expects Node `>=24.18.0 <27` and npm `>=12 <13`. Set `VITE_API_BASE_URL` if the API is not available through `/api`.
 
 ## Tests
 

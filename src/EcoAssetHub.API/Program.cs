@@ -1,4 +1,3 @@
-using FluentValidation.AspNetCore;
 using Scalar.AspNetCore;
 var  myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 var builder = WebApplication.CreateBuilder(args);
@@ -6,7 +5,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 
-builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddOpenApi();
 
 builder.AddApplicationServices();

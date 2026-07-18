@@ -1,8 +1,7 @@
-using EcoAssetHub.Domain.Interfaces;
 using EcoAssetHub.Domain.Models;
 using Microsoft.AspNetCore.Mvc;
 
-namespace EcoAssetHub.Query.Controllers;
+namespace EcoAssetHub.API.Controllers;
 
 [ApiController]
 [Route("api/curves")]

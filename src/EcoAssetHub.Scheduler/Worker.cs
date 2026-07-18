@@ -42,7 +42,7 @@ public class Worker(
                     continue;
                 }
 
-                publisher.Publish(message);
+                await publisher.PublishAsync(message, cancellationToken);
                 logger.LogInformation("Queued ingestion job {JobId} for schedule {ScheduleId} and curve {CurveId}.",
                     message.JobId,
                     message.ScheduleId,

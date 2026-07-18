@@ -11,7 +11,7 @@ Tech stack:
 - Vite
 - Vitest
 
-The backend is a separate .NET solution using CQRS and MediatR.
+The backend is a separate .NET solution with direct API controllers and repository-backed services.
 
 When working in this repository, focus only on the frontend unless explicitly instructed otherwise.
 

@@ -1,6 +1,6 @@
 using EcoAssetHub.Domain.Entities;
 using EcoAssetHub.Domain.Interfaces;
-using EcoAssetHub.Query.Controllers;
+using EcoAssetHub.API.Controllers;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EcoAssetHub.UnitTest.Controllers;

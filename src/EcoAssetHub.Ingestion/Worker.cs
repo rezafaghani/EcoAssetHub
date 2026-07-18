@@ -42,16 +42,15 @@ public class Worker(
             HostName = rabbitOptions.HostName,
             Port = rabbitOptions.Port,
             UserName = rabbitOptions.UserName,
-            Password = rabbitOptions.Password,
-            DispatchConsumersAsync = true
+            Password = rabbitOptions.Password
         };
-        using var connection = factory.CreateConnection();
-        using var channel = connection.CreateModel();
-        channel.QueueDeclare(rabbitOptions.QueueName, durable: true, exclusive: false, autoDelete: false);
-        channel.BasicQos(prefetchSize: 0, prefetchCount: 1, global: false);
+        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        await channel.QueueDeclareAsync(rabbitOptions.QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+        await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
-        consumer.Received += async (_, eventArgs) =>
+        consumer.ReceivedAsync += async (_, eventArgs) =>
         {
             try
             {
@@ -59,22 +58,22 @@ public class Worker(
                 var message = JsonSerializer.Deserialize<IngestionJobMessage>(json);
                 if (message is null)
                 {
-                    channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+                    await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
                     return;
                 }
 
                 var grain = grainFactory.GetGrain<IEnergyChartsDatasetGrain>(message.CurveId);
                 await grain.IngestAsync(json, stoppingToken);
-                channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to process ingestion job message.");
-                channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+                await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
             }
         };
 
-        channel.BasicConsume(rabbitOptions.QueueName, autoAck: false, consumer);
+        await channel.BasicConsumeAsync(rabbitOptions.QueueName, autoAck: false, consumer, stoppingToken);
         logger.LogInformation("Listening for ingestion jobs on RabbitMQ queue {QueueName}.", rabbitOptions.QueueName);
 
         await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
