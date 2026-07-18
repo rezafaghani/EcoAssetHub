@@ -58,10 +58,15 @@ public sealed class EcoAssetHubContext
                 curve_id text NOT NULL,
                 name text NOT NULL,
                 cron_expression text NOT NULL,
+                default_cron_expression text NOT NULL DEFAULT '',
                 enabled boolean NOT NULL,
                 endpoint text NOT NULL,
                 parameters jsonb NOT NULL,
                 lookback_hours integer NOT NULL,
+                window_start_expression text NOT NULL DEFAULT 'now-48h',
+                window_end_expression text NOT NULL DEFAULT 'now',
+                default_window_start_expression text NOT NULL DEFAULT 'now-48h',
+                default_window_end_expression text NOT NULL DEFAULT 'now',
                 batch_size integer NOT NULL,
                 last_queued_at timestamptz NULL,
                 created_at timestamptz NOT NULL,
@@ -125,6 +130,12 @@ public sealed class EcoAssetHubContext
 
             CREATE INDEX IF NOT EXISTS ix_energy_datasets_filters
                 ON energy_datasets(endpoint, curve_id, metric, country, bidding_zone, region, granularity);
+
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_cron_expression text NOT NULL DEFAULT '';
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_start_expression text NOT NULL DEFAULT 'now-48h';
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_end_expression text NOT NULL DEFAULT 'now';
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_start_expression text NOT NULL DEFAULT 'now-48h';
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_end_expression text NOT NULL DEFAULT 'now';
             """;
 
         await using var command = Postgres.CreateCommand(sql);

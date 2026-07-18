@@ -1,8 +1,9 @@
 using EcoAssetHub.Domain.Interfaces;
+using EcoAssetHub.Domain.Models;
 using EcoAssetHub.Infrastructure;
 using EcoAssetHub.Infrastructure.Repositories;
+using EcoAssetHub.Infrastructure.Services;
 using EcoAssetHub.Scheduler;
-using EcoAssetHub.Scheduler.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 

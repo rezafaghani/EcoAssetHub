@@ -25,6 +25,12 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         return await QuerySchedulesAsync($"{where} ORDER BY curve_id", parameters, cancellationToken);
     }
 
+    public async Task<IngestionSchedule?> GetScheduleAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var schedules = await QuerySchedulesAsync("WHERE id = @id LIMIT 1", [new NpgsqlParameter("id", id)], cancellationToken);
+        return schedules.FirstOrDefault();
+    }
+
     public async Task<List<IngestionJob>> GetJobsAsync(string? scheduleId, string? curveId, CancellationToken cancellationToken = default)
     {
         var (where, parameters) = BuildWhere(("schedule_id", scheduleId), ("curve_id", curveId));
@@ -102,25 +108,68 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         {
             await using var command = context.Postgres.CreateCommand("""
                 INSERT INTO ingestion_schedules (
-                    id, curve_id, name, cron_expression, enabled, endpoint, parameters,
-                    lookback_hours, batch_size, last_queued_at, created_at, updated_at)
+                    id, curve_id, name, cron_expression, default_cron_expression, enabled, endpoint, parameters,
+                    lookback_hours, window_start_expression, window_end_expression, default_window_start_expression,
+                    default_window_end_expression, batch_size, last_queued_at, created_at, updated_at)
                 VALUES (
-                    @id, @curve_id, @name, @cron_expression, @enabled, @endpoint, @parameters,
-                    @lookback_hours, @batch_size, @last_queued_at, @created_at, @updated_at)
+                    @id, @curve_id, @name, @cron_expression, @default_cron_expression, @enabled, @endpoint, @parameters,
+                    @lookback_hours, @window_start_expression, @window_end_expression, @default_window_start_expression,
+                    @default_window_end_expression, @batch_size, @last_queued_at, @created_at, @updated_at)
                 ON CONFLICT (id) DO UPDATE SET
                     curve_id = EXCLUDED.curve_id,
                     name = EXCLUDED.name,
-                    cron_expression = EXCLUDED.cron_expression,
+                    cron_expression = CASE WHEN ingestion_schedules.cron_expression = '* * * * *' THEN EXCLUDED.cron_expression ELSE ingestion_schedules.cron_expression END,
+                    default_cron_expression = EXCLUDED.default_cron_expression,
                     endpoint = EXCLUDED.endpoint,
                     parameters = EXCLUDED.parameters,
-                    lookback_hours = EXCLUDED.lookback_hours,
-                    batch_size = EXCLUDED.batch_size,
+                    lookback_hours = CASE WHEN ingestion_schedules.cron_expression = '* * * * *' THEN EXCLUDED.lookback_hours ELSE ingestion_schedules.lookback_hours END,
+                    default_window_start_expression = EXCLUDED.default_window_start_expression,
+                    default_window_end_expression = EXCLUDED.default_window_end_expression,
+                    batch_size = CASE WHEN ingestion_schedules.cron_expression = '* * * * *' THEN EXCLUDED.batch_size ELSE ingestion_schedules.batch_size END,
                     updated_at = EXCLUDED.updated_at
-                WHERE ingestion_schedules.cron_expression = '* * * * *'
                 """);
             AddScheduleParameters(command, schedule);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+    }
+
+    public async Task<IngestionSchedule?> UpdateScheduleAsync(IngestionSchedule schedule, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await ExecuteAsync("""
+            UPDATE ingestion_schedules
+            SET cron_expression = @cron_expression,
+                enabled = @enabled,
+                window_start_expression = @window_start_expression,
+                window_end_expression = @window_end_expression,
+                batch_size = @batch_size,
+                updated_at = @updated_at
+            WHERE id = @id
+            """, cancellationToken,
+            ("cron_expression", schedule.CronExpression),
+            ("enabled", schedule.Enabled),
+            ("window_start_expression", schedule.WindowStartExpression),
+            ("window_end_expression", schedule.WindowEndExpression),
+            ("batch_size", schedule.BatchSize),
+            ("updated_at", now),
+            ("id", schedule.Id));
+
+        return await GetScheduleAsync(schedule.Id, cancellationToken);
+    }
+
+    public async Task<IngestionSchedule?> ResetScheduleAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await ExecuteAsync("""
+            UPDATE ingestion_schedules
+            SET cron_expression = NULLIF(default_cron_expression, ''),
+                window_start_expression = default_window_start_expression,
+                window_end_expression = default_window_end_expression,
+                updated_at = @updated_at
+            WHERE id = @id AND default_cron_expression <> ''
+            """, cancellationToken, ("updated_at", now), ("id", id));
+
+        return await GetScheduleAsync(id, cancellationToken);
     }
 
     public async Task<IngestionJobMessage?> TryCreateQueuedJobAsync(IngestionSchedule schedule, DateTimeOffset queuedAt, CancellationToken cancellationToken = default)
@@ -174,7 +223,59 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             Endpoint = schedule.Endpoint,
             Parameters = schedule.Parameters,
             LookbackHours = schedule.LookbackHours,
+            WindowStartExpression = schedule.WindowStartExpression,
+            WindowEndExpression = schedule.WindowEndExpression,
             BatchSize = schedule.BatchSize
+        };
+    }
+
+    public async Task<IngestionJobMessage> CreateBackloadJobAsync(
+        IngestionSchedule schedule,
+        string endpoint,
+        Dictionary<string, string> parameters,
+        string windowStartExpression,
+        string windowEndExpression,
+        int batchSize,
+        DateTimeOffset queuedAt,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var job = new IngestionJob
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ScheduleId = schedule.Id,
+            CurveId = schedule.CurveId,
+            Status = IngestionStatuses.Queued,
+            QueuedAt = queuedAt
+        };
+        var execution = new IngestionExecution
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            JobId = job.Id,
+            ScheduleId = schedule.Id,
+            CurveId = schedule.CurveId,
+            Status = IngestionStatuses.Queued,
+            CreatedAt = queuedAt
+        };
+
+        await InsertJobAsync(connection, transaction, job, cancellationToken);
+        await InsertExecutionAsync(connection, transaction, execution, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new IngestionJobMessage
+        {
+            ScheduleId = schedule.Id,
+            JobId = job.Id,
+            ExecutionId = execution.Id,
+            CurveId = schedule.CurveId,
+            Endpoint = endpoint,
+            Parameters = parameters,
+            LookbackHours = schedule.LookbackHours,
+            WindowStartExpression = windowStartExpression,
+            WindowEndExpression = windowEndExpression,
+            BatchSize = batchSize
         };
     }
 
@@ -211,7 +312,9 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
     {
         var sql = $"""
             SELECT id, curve_id, name, cron_expression, enabled, endpoint, parameters,
-                   lookback_hours, batch_size, last_queued_at, created_at, updated_at
+                   lookback_hours, batch_size, last_queued_at, created_at, updated_at,
+                   default_cron_expression, window_start_expression, window_end_expression,
+                   default_window_start_expression, default_window_end_expression
             FROM ingestion_schedules
             {suffix}
             """;
@@ -229,6 +332,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
                 CurveId = reader.GetString(1),
                 Name = reader.GetString(2),
                 CronExpression = reader.GetString(3),
+                DefaultCronExpression = reader.GetString(12),
                 Enabled = reader.GetBoolean(4),
                 Endpoint = reader.GetString(5),
                 Parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(6)) ?? [],
@@ -236,7 +340,11 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
                 BatchSize = reader.GetInt32(8),
                 LastQueuedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
                 CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
-                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(11)
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(11),
+                WindowStartExpression = reader.GetString(13),
+                WindowEndExpression = reader.GetString(14),
+                DefaultWindowStartExpression = reader.GetString(15),
+                DefaultWindowEndExpression = reader.GetString(16)
             });
         }
 
@@ -268,10 +376,15 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         command.Parameters.AddWithValue("curve_id", schedule.CurveId);
         command.Parameters.AddWithValue("name", schedule.Name);
         command.Parameters.AddWithValue("cron_expression", schedule.CronExpression);
+        command.Parameters.AddWithValue("default_cron_expression", string.IsNullOrWhiteSpace(schedule.DefaultCronExpression) ? schedule.CronExpression : schedule.DefaultCronExpression);
         command.Parameters.AddWithValue("enabled", schedule.Enabled);
         command.Parameters.AddWithValue("endpoint", schedule.Endpoint);
         command.Parameters.Add(new NpgsqlParameter("parameters", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(schedule.Parameters) });
         command.Parameters.AddWithValue("lookback_hours", schedule.LookbackHours);
+        command.Parameters.AddWithValue("window_start_expression", schedule.WindowStartExpression);
+        command.Parameters.AddWithValue("window_end_expression", schedule.WindowEndExpression);
+        command.Parameters.AddWithValue("default_window_start_expression", schedule.DefaultWindowStartExpression);
+        command.Parameters.AddWithValue("default_window_end_expression", schedule.DefaultWindowEndExpression);
         command.Parameters.AddWithValue("batch_size", schedule.BatchSize);
         command.Parameters.AddWithValue("last_queued_at", DbValue.From(schedule.LastQueuedAt));
         command.Parameters.AddWithValue("created_at", schedule.CreatedAt);

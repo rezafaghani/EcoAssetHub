@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildJobHistoryRows, buildScheduleJobHistoryRows, buildScheduleStatusRows, type IngestionExecution, type IngestionJob, type IngestionSchedule } from './ingestionStatus';
+import { buildJobHistoryRows, buildScheduleJobHistoryRows, buildScheduleStatusRows, suggestCronFromGranularity, type IngestionExecution, type IngestionJob, type IngestionSchedule } from './ingestionStatus';
 
 describe('ingestion status rows', () => {
   it('connects each schedule to the latest job and latest execution', () => {
@@ -91,6 +91,12 @@ describe('ingestion status rows', () => {
     expect(rows[0].id).toBe('job-2');
     expect(rows[0].latestExecution?.id).toBe('execution-2');
   });
+
+  it('suggests cron from dataset granularity', () => {
+    expect(suggestCronFromGranularity('15min')).toBe('*/15 * * * *');
+    expect(suggestCronFromGranularity('hourly')).toBe('0 * * * *');
+    expect(suggestCronFromGranularity('daily')).toBe('0 3 * * *');
+  });
 });
 
 function schedule(id: string): IngestionSchedule {
@@ -99,10 +105,15 @@ function schedule(id: string): IngestionSchedule {
     curveId: 'curve-1',
     name: 'Public power',
     cronExpression: '*/15 * * * *',
+    defaultCronExpression: '*/15 * * * *',
     enabled: true,
     endpoint: 'public_power',
     parameters: {},
     lookbackHours: 48,
+    windowStartExpression: 'now-48h',
+    windowEndExpression: 'now',
+    defaultWindowStartExpression: 'now-48h',
+    defaultWindowEndExpression: 'now',
     batchSize: 500,
     lastQueuedAt: '2026-01-02T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z'

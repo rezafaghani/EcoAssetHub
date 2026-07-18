@@ -4,7 +4,7 @@ using EcoAssetHub.Domain.Models;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 
-namespace EcoAssetHub.Scheduler.Services;
+namespace EcoAssetHub.Infrastructure.Services;
 
 public class RabbitMqJobPublisher(IOptions<RabbitMqOptions> options)
 {

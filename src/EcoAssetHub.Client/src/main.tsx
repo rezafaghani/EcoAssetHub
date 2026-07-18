@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getDatasetCurveId, groupDatasetsByCurve } from './curves';
-import { buildScheduleJobHistoryRows, buildScheduleStatusRows, type IngestionExecution, type IngestionJob, type IngestionSchedule, type ScheduleStatusRow } from './ingestionStatus';
+import { buildScheduleJobHistoryRows, buildScheduleStatusRows, suggestCronFromGranularity, type IngestionExecution, type IngestionJob, type IngestionSchedule, type ScheduleStatusRow } from './ingestionStatus';
 import './styles.css';
 
 interface DatasetMetadata {
@@ -188,6 +188,53 @@ function App() {
     }
   }
 
+  async function saveSchedule(schedule: IngestionSchedule) {
+    setError('');
+    const response = await fetch(`${apiBase}/ingestion/schedules/${encodeURIComponent(schedule.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cronExpression: schedule.cronExpression,
+        enabled: schedule.enabled,
+        windowStartExpression: schedule.windowStartExpression,
+        windowEndExpression: schedule.windowEndExpression,
+        batchSize: schedule.batchSize
+      })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to save schedule.');
+      return false;
+    }
+    await loadIngestionStatus(schedule.curveId);
+    return true;
+  }
+
+  async function resetSchedule(scheduleId: string) {
+    setError('');
+    const response = await fetch(`${apiBase}/ingestion/schedules/${encodeURIComponent(scheduleId)}/reset`, { method: 'POST' });
+    if (!response.ok) {
+      setError('Unable to reset schedule.');
+      return false;
+    }
+    await loadIngestionStatus(selectedCurveId);
+    return true;
+  }
+
+  async function createBackload(scheduleId: string, datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) {
+    setError('');
+    const response = await fetch(`${apiBase}/ingestion/schedules/${encodeURIComponent(scheduleId)}/backloads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ datasetId, windowStartExpression, windowEndExpression, batchSize })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to queue backload.');
+      return false;
+    }
+    await loadIngestionStatus(selectedCurveId);
+    return true;
+  }
+
   function selectCurve(curveId: string) {
     const curveDatasets = datasets.filter(dataset => getDatasetCurveId(dataset) === curveId);
     const nextSelected = curveDatasets[0] ?? null;
@@ -287,7 +334,17 @@ function App() {
 
         <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} />
 
-        <IngestionStatusPanel curveId={selectedCurveId} schedules={schedules} jobs={jobs} executions={executions} latestExecution={latestExecution} />
+        <IngestionStatusPanel
+          curveId={selectedCurveId}
+          schedules={schedules}
+          jobs={jobs}
+          executions={executions}
+          latestExecution={latestExecution}
+          datasets={selectedCurveDatasets}
+          onSaveSchedule={saveSchedule}
+          onResetSchedule={resetSchedule}
+          onCreateBackload={createBackload}
+        />
 
         <section className="chart-zone">
           <svg viewBox={`0 0 ${chartViewBox.width} ${chartViewBox.height}`} role="img" aria-label="Dataset time series">
@@ -351,15 +408,25 @@ function IngestionStatusPanel({
   schedules,
   jobs,
   executions,
-  latestExecution
+  latestExecution,
+  datasets,
+  onSaveSchedule,
+  onResetSchedule,
+  onCreateBackload
 }: {
   curveId: string;
   schedules: IngestionSchedule[];
   jobs: IngestionJob[];
   executions: IngestionExecution[];
   latestExecution?: IngestionExecution;
+  datasets: DatasetMetadata[];
+  onSaveSchedule: (schedule: IngestionSchedule) => Promise<boolean>;
+  onResetSchedule: (scheduleId: string) => Promise<boolean>;
+  onCreateBackload: (scheduleId: string, datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) => Promise<boolean>;
 }) {
   const [historyScheduleId, setHistoryScheduleId] = useState('');
+  const [editingSchedule, setEditingSchedule] = useState<IngestionSchedule | null>(null);
+  const [backloadSchedule, setBackloadSchedule] = useState<IngestionSchedule | null>(null);
   const scheduleRows = buildScheduleStatusRows(schedules, jobs, executions);
   const historySchedule = scheduleRows.find(row => row.id === historyScheduleId);
   const historyRows = historyScheduleId ? buildScheduleJobHistoryRows(historyScheduleId, jobs, executions).slice(0, 20) : [];
@@ -383,7 +450,41 @@ function IngestionStatusPanel({
         <MetricTile label="Latest inserted" value={(latestExecution?.inserted ?? 0).toLocaleString()} />
       </div>
 
-      <ScheduleStatusTable rows={scheduleRows} onOpenHistory={setHistoryScheduleId} />
+      <ScheduleStatusTable
+        rows={scheduleRows}
+        onOpenHistory={setHistoryScheduleId}
+        onEdit={scheduleId => setEditingSchedule(schedules.find(schedule => schedule.id === scheduleId) ?? null)}
+        onBackload={scheduleId => setBackloadSchedule(schedules.find(schedule => schedule.id === scheduleId) ?? null)}
+      />
+      {editingSchedule && (
+        <ScheduleEditModal
+          schedule={editingSchedule}
+          datasets={datasets}
+          onClose={() => setEditingSchedule(null)}
+          onSave={async schedule => {
+            if (await onSaveSchedule(schedule)) {
+              setEditingSchedule(null);
+            }
+          }}
+          onReset={async scheduleId => {
+            if (await onResetSchedule(scheduleId)) {
+              setEditingSchedule(null);
+            }
+          }}
+        />
+      )}
+      {backloadSchedule && (
+        <BackloadModal
+          schedule={backloadSchedule}
+          datasets={datasets}
+          onClose={() => setBackloadSchedule(null)}
+          onCreate={async (datasetId, windowStartExpression, windowEndExpression, batchSize) => {
+            if (await onCreateBackload(backloadSchedule.id, datasetId, windowStartExpression, windowEndExpression, batchSize)) {
+              setBackloadSchedule(null);
+            }
+          }}
+        />
+      )}
       {historySchedule && (
         <ScheduleHistoryModal
           schedule={historySchedule}
@@ -406,10 +507,14 @@ function MetricTile({ label, value, className = '' }: { label: string; value: st
 
 function ScheduleStatusTable({
   rows,
-  onOpenHistory
+  onOpenHistory,
+  onEdit,
+  onBackload
 }: {
   rows: ReturnType<typeof buildScheduleStatusRows>;
   onOpenHistory: (scheduleId: string) => void;
+  onEdit: (scheduleId: string) => void;
+  onBackload: (scheduleId: string) => void;
 }) {
   return (
     <section className="status-table">
@@ -431,6 +536,12 @@ function ScheduleStatusTable({
                 <td>{row.latestJob?.queuedAt ? formatDate(row.latestJob.queuedAt) : (row.latestJob ? '' : 'Never')}</td>
                 <td>{row.displayExecution ? `${row.displayExecution.inserted.toLocaleString()} inserted · ${row.displayExecution.skipped.toLocaleString()} skipped` : ''}</td>
                 <td>
+                  <button className="table-action" type="button" onClick={() => onEdit(row.id)}>
+                    Edit
+                  </button>
+                  <button className="table-action" type="button" onClick={() => onBackload(row.id)}>
+                    Backload
+                  </button>
                   <button className="table-action" type="button" onClick={() => onOpenHistory(row.id)}>
                     History
                   </button>
@@ -441,6 +552,157 @@ function ScheduleStatusTable({
         </table>
       </div>
     </section>
+  );
+}
+
+function ScheduleEditModal({
+  schedule,
+  datasets,
+  onClose,
+  onSave,
+  onReset
+}: {
+  schedule: IngestionSchedule;
+  datasets: DatasetMetadata[];
+  onClose: () => void;
+  onSave: (schedule: IngestionSchedule) => Promise<void>;
+  onReset: (scheduleId: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(schedule);
+  const cronChanged = draft.cronExpression !== draft.defaultCronExpression;
+  const granularity = datasets.find(dataset => dataset.endpoint === schedule.endpoint)?.granularity ?? '';
+  const suggestedCron = suggestCronFromGranularity(granularity);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-panel form-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-edit-title" onClick={event => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <h3 id="schedule-edit-title">Edit schedule</h3>
+            <p>{schedule.name} · {schedule.endpoint}</p>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close schedule editor">×</button>
+        </header>
+
+        <div className="form-grid">
+          <label className="switch-row">
+            <input type="checkbox" checked={draft.enabled} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />
+            <span>{draft.enabled ? 'Enabled' : 'Disabled'}</span>
+          </label>
+          <label>
+            <span>Cron</span>
+            <input value={draft.cronExpression} onChange={event => setDraft({ ...draft, cronExpression: event.target.value })} />
+            <small>{cronChanged ? `Default: ${draft.defaultCronExpression}` : 'Using default cadence'}</small>
+            {suggestedCron && <small>Granularity suggests {suggestedCron}</small>}
+          </label>
+          <label>
+            <span>Window start</span>
+            <input value={draft.windowStartExpression} onChange={event => setDraft({ ...draft, windowStartExpression: event.target.value })} />
+          </label>
+          <label>
+            <span>Window end</span>
+            <input value={draft.windowEndExpression} onChange={event => setDraft({ ...draft, windowEndExpression: event.target.value })} />
+          </label>
+          <label>
+            <span>Batch size</span>
+            <input type="number" min="1" value={draft.batchSize} onChange={event => setDraft({ ...draft, batchSize: Number(event.target.value) })} />
+          </label>
+        </div>
+
+        <PresetButtons onPick={(startValue, endValue) => setDraft({ ...draft, windowStartExpression: startValue, windowEndExpression: endValue })} />
+
+        <footer className="modal-actions">
+          <button className="secondary" type="button" onClick={() => onReset(schedule.id)}>Reset to default</button>
+          <span className="muted">Default cron follows the seeded curve cadence.</span>
+          <button type="button" onClick={() => onSave(draft)}>Save</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function BackloadModal({
+  schedule,
+  datasets,
+  onClose,
+  onCreate
+}: {
+  schedule: IngestionSchedule;
+  datasets: DatasetMetadata[];
+  onClose: () => void;
+  onCreate: (datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) => Promise<void>;
+}) {
+  const defaultDataset = datasets.find(dataset => dataset.endpoint === schedule.endpoint) ?? datasets[0];
+  const [datasetId, setDatasetId] = useState(defaultDataset?.id ?? '');
+  const [windowStartExpression, setWindowStartExpression] = useState('today-1');
+  const [windowEndExpression, setWindowEndExpression] = useState('today');
+  const [batchSize, setBatchSize] = useState(schedule.batchSize);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-panel form-modal" role="dialog" aria-modal="true" aria-labelledby="backload-title" onClick={event => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <h3 id="backload-title">Backload missed data</h3>
+            <p>{schedule.name} · queued once, then normal schedule continues</p>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close backload">×</button>
+        </header>
+
+        <div className="form-grid">
+          <label className="wide">
+            <span>Dataset</span>
+            <select value={datasetId} onChange={event => setDatasetId(event.target.value)}>
+              {datasets.map(dataset => (
+                <option key={dataset.id} value={dataset.id}>
+                  {dataset.metric} · {dataset.endpoint} · {dataset.granularity || 'unknown cadence'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Start</span>
+            <input value={windowStartExpression} onChange={event => setWindowStartExpression(event.target.value)} />
+          </label>
+          <label>
+            <span>End</span>
+            <input value={windowEndExpression} onChange={event => setWindowEndExpression(event.target.value)} />
+          </label>
+          <label>
+            <span>Batch size</span>
+            <input type="number" min="1" value={batchSize} onChange={event => setBatchSize(Number(event.target.value))} />
+          </label>
+        </div>
+
+        <PresetButtons onPick={(startValue, endValue) => {
+          setWindowStartExpression(startValue);
+          setWindowEndExpression(endValue);
+        }} />
+
+        <footer className="modal-actions">
+          <span className="muted">Use relative windows like today-1 to today or exact ISO timestamps.</span>
+          <button type="button" disabled={!datasetId} onClick={() => onCreate(datasetId, windowStartExpression, windowEndExpression, batchSize)}>Queue backload</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function PresetButtons({ onPick }: { onPick: (startValue: string, endValue: string) => void }) {
+  const presets = [
+    ['Previous day', 'today-1', 'today'],
+    ['Last 48h', 'now-48h', 'now'],
+    ['Today + forecast', 'today', 'today+1']
+  ];
+
+  return (
+    <div className="preset-row">
+      {presets.map(([label, startValue, endValue]) => (
+        <button className="secondary" type="button" key={label} onClick={() => onPick(startValue, endValue)}>
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 

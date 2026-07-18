@@ -1,4 +1,5 @@
 using System.Web;
+using System.Text.RegularExpressions;
 
 namespace EcoAssetHub.Ingestion.Services;
 
@@ -51,6 +52,11 @@ public static class EnergyChartsDefaults
 
     public static EnergyChartsDatasetDefinition WithDateRange(EnergyChartsDatasetDefinition definition, int lookbackHours)
     {
+        return WithDateRange(definition, $"now-{Math.Max(lookbackHours, 1)}h", "now");
+    }
+
+    public static EnergyChartsDatasetDefinition WithDateRange(EnergyChartsDatasetDefinition definition, string startExpression, string endExpression)
+    {
         if (definition.Parameters.ContainsKey("start") || IsLatestOnly(definition.Endpoint))
         {
             return definition;
@@ -61,11 +67,39 @@ public static class EnergyChartsDefaults
             Endpoint = definition.Endpoint,
             Parameters = new Dictionary<string, string>(definition.Parameters)
         };
-        var end = DateTimeOffset.UtcNow;
-        var start = end.AddHours(-Math.Max(lookbackHours, 1));
+        var now = DateTimeOffset.UtcNow;
+        var start = ResolveTimeExpression(startExpression, now);
+        var end = ResolveTimeExpression(endExpression, now);
         copy.Parameters["start"] = FormatTimestamp(start);
         copy.Parameters["end"] = FormatTimestamp(end);
         return copy;
+    }
+
+    public static DateTimeOffset ResolveTimeExpression(string expression, DateTimeOffset now)
+    {
+        if (DateTimeOffset.TryParse(expression, out var explicitTime))
+        {
+            return explicitTime.ToUniversalTime();
+        }
+
+        var value = expression.Trim().ToLowerInvariant();
+        var match = Regex.Match(value, "^(now|today)([+-]\\d+)?([hd])?$");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException($"Time expression '{expression}' is not supported.");
+        }
+
+        var baseTime = match.Groups[1].Value == "today"
+            ? new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero)
+            : now;
+        if (!match.Groups[2].Success)
+        {
+            return baseTime;
+        }
+
+        var amount = int.Parse(match.Groups[2].Value);
+        var unit = match.Groups[3].Success ? match.Groups[3].Value : "d";
+        return unit == "h" ? baseTime.AddHours(amount) : baseTime.AddDays(amount);
     }
 
     public static string CreateDefinitionKey(EnergyChartsDatasetDefinition definition)

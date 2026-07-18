@@ -1,7 +1,7 @@
 using Cronos;
 using EcoAssetHub.Domain.Entities;
 using EcoAssetHub.Domain.Interfaces;
-using EcoAssetHub.Scheduler.Services;
+using EcoAssetHub.Infrastructure.Services;
 using Microsoft.Extensions.Options;
 
 namespace EcoAssetHub.Scheduler;
@@ -29,13 +29,13 @@ public class Worker(
 
         foreach (var schedule in await repository.GetEnabledSchedulesAsync(cancellationToken))
         {
-            if (!IsDue(schedule, now))
-            {
-                continue;
-            }
-
             try
             {
+                if (!IsDue(schedule, now))
+                {
+                    continue;
+                }
+
                 var message = await repository.TryCreateQueuedJobAsync(schedule, now, cancellationToken);
                 if (message is null)
                 {
