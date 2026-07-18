@@ -53,6 +53,8 @@ const chartViewBox = { width: 900, height: 380 };
 const chartHorizontalPadding = 18;
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
 const refreshIntervalMs = 15_000;
+const defaultTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const timeZones = unique([defaultTimeZone, 'UTC', 'Europe/Copenhagen', 'Europe/London', 'America/New_York', 'Asia/Tokyo']);
 
 function App() {
   const [datasets, setDatasets] = useState<DatasetMetadata[]>([]);
@@ -68,6 +70,7 @@ function App() {
   const [start, setStart] = useState(toLocalInput(new Date(Date.now() - 24 * 60 * 60 * 1000)));
   const [end, setEnd] = useState(toLocalInput(new Date()));
   const [asOf, setAsOf] = useState('');
+  const [timeZone, setTimeZone] = useState(defaultTimeZone);
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState(true);
   const [lastLiveRefresh, setLastLiveRefresh] = useState('');
@@ -83,7 +86,7 @@ function App() {
   const curves = useMemo(() => groupDatasetsByCurve(datasets), [datasets]);
   const selectedCurve = curves.find(curve => curve.id === selectedCurveId);
   const selectedCurveDatasets = (selectedCurve?.datasets ?? []) as DatasetMetadata[];
-  const chartData = useMemo(() => buildChartData(series, selected?.unit ?? ''), [series, selected?.unit]);
+  const chartData = useMemo(() => buildChartData(series, selected?.unit ?? '', timeZone), [series, selected?.unit, timeZone]);
   const latestExecution = executions[0];
 
   useEffect(() => {
@@ -105,7 +108,7 @@ function App() {
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
-  }, [live, selected, selectedCurveId, start, end, asOf, search, endpoint, metric]);
+  }, [live, selected, selectedCurveId, start, end, asOf, timeZone, search, endpoint, metric]);
 
   async function loadDatasets(silent = false) {
     if (!silent) setLoading(true);
@@ -147,10 +150,11 @@ function App() {
     setError('');
     try {
       const params = new URLSearchParams({
-        start: toApiDateExpression(start),
-        end: toApiDateExpression(end)
+        start: start.trim(),
+        end: end.trim(),
+        timeZone
       });
-      if (asOf) params.set('asOf', toApiDateExpression(asOf));
+      if (asOf) params.set('asOf', asOf.trim());
       const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/series?${params}`);
       if (!response.ok) throw new Error('Series request failed');
       setSeries(await response.json() as TimeSeriesPoint[]);
@@ -283,7 +287,7 @@ function App() {
               className={selectedCurveId === curve.id ? 'dataset active' : 'dataset'}
               onClick={() => selectCurve(curve.id)}>
               <span>{curve.label}</span>
-              <small>{curve.datasets.length} datasets · {curve.lastIngestedAt ? formatDate(curve.lastIngestedAt) : 'not ingested'}</small>
+              <small>{curve.datasets.length} datasets · {curve.lastIngestedAt ? formatDate(curve.lastIngestedAt, timeZone) : 'not ingested'}</small>
             </button>
           ))}
         </div>
@@ -319,9 +323,15 @@ function App() {
           </div>
 
           <div className="range-toolbar">
-            <label><span>Start</span><input value={start} onChange={event => setStart(event.target.value)} placeholder="today-1 or exact time" /></label>
-            <label><span>End</span><input value={end} onChange={event => setEnd(event.target.value)} placeholder="now, today+1, or exact time" /></label>
-            <label><span>Version time</span><input value={asOf} onChange={event => setAsOf(event.target.value)} placeholder="empty for latest, now, or exact time" /></label>
+            <DateExpressionInput label="Start" value={start} onChange={setStart} placeholder="today-1 or exact time" />
+            <DateExpressionInput label="End" value={end} onChange={setEnd} placeholder="now, today+1, or exact time" />
+            <DateExpressionInput label="Version time" value={asOf} onChange={setAsOf} placeholder="empty for latest, now, or exact time" />
+            <label>
+              <span>Time zone</span>
+              <select value={timeZone} onChange={event => setTimeZone(event.target.value)}>
+                {timeZones.map(value => <option key={value} value={value}>{formatTimeZoneLabel(value)}</option>)}
+              </select>
+            </label>
             <label className="live-toggle">
               <input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)} />
               Live
@@ -332,7 +342,7 @@ function App() {
 
         {error && <div className="error">{error}</div>}
 
-        <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} />
+        <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -341,6 +351,7 @@ function App() {
           executions={executions}
           latestExecution={latestExecution}
           datasets={selectedCurveDatasets}
+          timeZone={timeZone}
           onSaveSchedule={saveSchedule}
           onResetSchedule={resetSchedule}
           onCreateBackload={createBackload}
@@ -372,7 +383,7 @@ function App() {
                 cy={chartPoint.y}
                 r="4"
                 tabIndex={0}
-                aria-label={`${formatDate(chartPoint.point.timestamp)} ${formatValue(chartPoint.point.value, selected?.unit ?? '')}`}
+                aria-label={`${formatDate(chartPoint.point.timestamp, timeZone)} ${formatValue(chartPoint.point.value, selected?.unit ?? '')}`}
                 onMouseEnter={() => setHoveredPoint(chartPoint)}
                 onMouseLeave={() => setHoveredPoint(null)}
                 onFocus={() => setHoveredPoint(chartPoint)}
@@ -383,7 +394,7 @@ function App() {
               <g className="chart-tooltip" transform={tooltipTransform(hoveredPoint)}>
                 <rect width="238" height="44" rx="6" />
                 <text x="10" y="17">
-                  {formatDate(hoveredPoint.point.timestamp)}
+                  {formatDate(hoveredPoint.point.timestamp, timeZone)}
                   <tspan x="10" dy="17">{formatValue(hoveredPoint.point.value, selected?.unit ?? '')}</tspan>
                 </text>
               </g>
@@ -392,12 +403,12 @@ function App() {
           </svg>
           <div className="chart-footer">
             <span>{series.length} points</span>
-            <span>{selected?.lastIngestedAt ? `Last ingested ${formatDate(selected.lastIngestedAt)}` : 'No ingestion timestamp'}</span>
-            <span>{lastLiveRefresh ? `Live refresh ${formatDate(lastLiveRefresh)}` : `Live refresh every ${refreshIntervalMs / 1000}s`}</span>
+            <span>{selected?.lastIngestedAt ? `Last ingested ${formatDate(selected.lastIngestedAt, timeZone)}` : 'No ingestion timestamp'}</span>
+            <span>{lastLiveRefresh ? `Live refresh ${formatDate(lastLiveRefresh, timeZone)}` : `Live refresh every ${refreshIntervalMs / 1000}s`}</span>
           </div>
         </section>
 
-        <PointTable points={series} unit={selected?.unit ?? ''} />
+        <PointTable points={series} unit={selected?.unit ?? ''} timeZone={timeZone} />
       </section>
     </main>
   );
@@ -410,6 +421,7 @@ function IngestionStatusPanel({
   executions,
   latestExecution,
   datasets,
+  timeZone,
   onSaveSchedule,
   onResetSchedule,
   onCreateBackload
@@ -420,6 +432,7 @@ function IngestionStatusPanel({
   executions: IngestionExecution[];
   latestExecution?: IngestionExecution;
   datasets: DatasetMetadata[];
+  timeZone: string;
   onSaveSchedule: (schedule: IngestionSchedule) => Promise<boolean>;
   onResetSchedule: (scheduleId: string) => Promise<boolean>;
   onCreateBackload: (scheduleId: string, datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) => Promise<boolean>;
@@ -452,6 +465,7 @@ function IngestionStatusPanel({
 
       <ScheduleStatusTable
         rows={scheduleRows}
+        timeZone={timeZone}
         onOpenHistory={setHistoryScheduleId}
         onEdit={scheduleId => setEditingSchedule(schedules.find(schedule => schedule.id === scheduleId) ?? null)}
         onBackload={scheduleId => setBackloadSchedule(schedules.find(schedule => schedule.id === scheduleId) ?? null)}
@@ -489,6 +503,7 @@ function IngestionStatusPanel({
         <ScheduleHistoryModal
           schedule={historySchedule}
           rows={historyRows}
+          timeZone={timeZone}
           onClose={() => setHistoryScheduleId('')}
         />
       )}
@@ -505,13 +520,42 @@ function MetricTile({ label, value, className = '' }: { label: string; value: st
   );
 }
 
+function DateExpressionInput({
+  label,
+  value,
+  placeholder,
+  onChange
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <div className="date-expression">
+        <input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder} />
+        <input
+          aria-label={`${label} picker`}
+          type="datetime-local"
+          value={toPickerInput(value)}
+          onChange={event => onChange(event.target.value)}
+        />
+      </div>
+    </label>
+  );
+}
+
 function ScheduleStatusTable({
   rows,
+  timeZone,
   onOpenHistory,
   onEdit,
   onBackload
 }: {
   rows: ReturnType<typeof buildScheduleStatusRows>;
+  timeZone: string;
   onOpenHistory: (scheduleId: string) => void;
   onEdit: (scheduleId: string) => void;
   onBackload: (scheduleId: string) => void;
@@ -533,7 +577,7 @@ function ScheduleStatusTable({
                   <StatusBadge status={row.displayStatus} />
                   <small>{row.displayExecution?.error || row.latestExecution?.error || row.latestJob?.error || row.latestJob?.id || 'No jobs yet'}</small>
                 </td>
-                <td>{row.latestJob?.queuedAt ? formatDate(row.latestJob.queuedAt) : (row.latestJob ? '' : 'Never')}</td>
+                <td>{row.latestJob?.queuedAt ? formatDate(row.latestJob.queuedAt, timeZone) : (row.latestJob ? '' : 'Never')}</td>
                 <td>{row.displayExecution ? `${row.displayExecution.inserted.toLocaleString()} inserted · ${row.displayExecution.skipped.toLocaleString()} skipped` : ''}</td>
                 <td>
                   <button className="table-action" type="button" onClick={() => onEdit(row.id)}>
@@ -709,10 +753,12 @@ function PresetButtons({ onPick }: { onPick: (startValue: string, endValue: stri
 function ScheduleHistoryModal({
   schedule,
   rows,
+  timeZone,
   onClose
 }: {
   schedule: ScheduleStatusRow;
   rows: ReturnType<typeof buildScheduleJobHistoryRows>;
+  timeZone: string;
   onClose: () => void;
 }) {
   return (
@@ -733,7 +779,7 @@ function ScheduleHistoryModal({
               {rows.map(row => (
                 <tr key={row.id} title={row.latestExecution?.error || row.job.error || row.id}>
                   <td>
-                    <strong>{formatDate(row.job.queuedAt)}</strong>
+                    <strong>{formatDate(row.job.queuedAt, timeZone)}</strong>
                     <small>{row.job.id}</small>
                   </td>
                   <td><StatusBadge status={row.job.status} /></td>
@@ -757,7 +803,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status.toLowerCase()}`}>{status || 'unknown'}</span>;
 }
 
-function MetadataPanel({ dataset, curveId, datasetCount }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number }) {
+function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number; timeZone: string }) {
   if (!dataset) return <section className="metadata-panel"><h2>Curve details</h2><p>No curve selected.</p></section>;
   const rows = [
     ['Curve', curveId],
@@ -774,7 +820,7 @@ function MetadataPanel({ dataset, curveId, datasetCount }: { dataset: DatasetMet
     ['Production type', dataset.productionType],
     ['Forecast type', dataset.forecastType],
     ['Neighbor', dataset.neighbor],
-    ['Last ingested', formatDate(dataset.lastIngestedAt)]
+    ['Last ingested', formatDate(dataset.lastIngestedAt, timeZone)]
   ].filter(([, value]) => value);
 
   return (
@@ -785,7 +831,7 @@ function MetadataPanel({ dataset, curveId, datasetCount }: { dataset: DatasetMet
   );
 }
 
-function PointTable({ points, unit }: { points: TimeSeriesPoint[]; unit: string }) {
+function PointTable({ points, unit, timeZone }: { points: TimeSeriesPoint[]; unit: string; timeZone: string }) {
   return (
     <section className="table-panel">
       <h2>{points.length} points</h2>
@@ -795,9 +841,9 @@ function PointTable({ points, unit }: { points: TimeSeriesPoint[]; unit: string 
           <tbody>
             {points.slice(0, 200).map(point => (
               <tr key={`${point.timestamp}-${point.asOf}`}>
-                <td>{formatDate(point.timestamp)}</td>
+                <td>{formatDate(point.timestamp, timeZone)}</td>
                 <td>{formatValue(point.value, unit)}</td>
-                <td>{formatDate(point.asOf)}</td>
+                <td>{formatDate(point.asOf, timeZone)}</td>
               </tr>
             ))}
           </tbody>
@@ -807,7 +853,7 @@ function PointTable({ points, unit }: { points: TimeSeriesPoint[]; unit: string 
   );
 }
 
-function buildChartData(points: TimeSeriesPoint[], unit: string) {
+function buildChartData(points: TimeSeriesPoint[], unit: string, timeZone: string) {
   const numeric = points.filter(point => point.value !== null);
   if (numeric.length === 0) return { points: [], path: '', xTicks: [], yTicks: [] };
 
@@ -833,19 +879,19 @@ function buildChartData(points: TimeSeriesPoint[], unit: string) {
     const y = chartBounds.bottom - ((value - min) * height) / range;
     return { y, label: formatTickValue(value) };
   }).reverse();
-  const xTicks = buildXTicks(chartPoints);
+  const xTicks = buildXTicks(chartPoints, timeZone);
   const path = chartPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
 
   return { points: chartPoints, path, xTicks, yTicks };
 }
 
-function buildXTicks(points: ChartPoint[]): ChartTick[] {
+function buildXTicks(points: ChartPoint[], timeZone: string): ChartTick[] {
   const ticks = pickTicks(points, 4);
   const first = new Date(points[0].point.timestamp).getTime();
   const last = new Date(points[points.length - 1].point.timestamp).getTime();
   return ticks.map((point, index) => ({
     x: point.x,
-    label: formatChartTime(point.point.timestamp, last - first),
+    label: formatChartTime(point.point.timestamp, last - first, timeZone),
     anchor: index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle'
   }));
 }
@@ -873,18 +919,18 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
 
-function formatDate(value: string) {
-  return value ? new Date(value).toLocaleString() : '';
+function formatDate(value: string, timeZone: string) {
+  return value ? new Intl.DateTimeFormat([], dateTimeFormat(timeZone)).format(new Date(value)) : '';
 }
 
-function formatChartTime(value: string, rangeMs: number) {
+function formatChartTime(value: string, rangeMs: number, timeZone: string) {
   if (!value) return '';
   const date = new Date(value);
   const day = 24 * 60 * 60 * 1000;
-  if (rangeMs <= 2 * day) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (rangeMs <= 14 * day) return date.toLocaleDateString([], { weekday: 'short', day: '2-digit' });
-  if (rangeMs <= 120 * day) return date.toLocaleDateString([], { month: 'short', day: '2-digit' });
-  return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+  if (rangeMs <= 2 * day) return new Intl.DateTimeFormat([], { timeZone, hour: '2-digit', minute: '2-digit' }).format(date);
+  if (rangeMs <= 14 * day) return new Intl.DateTimeFormat([], { timeZone, weekday: 'short', day: '2-digit' }).format(date);
+  if (rangeMs <= 120 * day) return new Intl.DateTimeFormat([], { timeZone, month: 'short', day: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat([], { timeZone, month: 'short', year: '2-digit' }).format(date);
 }
 
 function formatTickValue(value: number) {
@@ -908,10 +954,24 @@ function toLocalInput(date: Date) {
   return local.toISOString().slice(0, 16);
 }
 
-function toApiDateExpression(value: string) {
-  const trimmed = value.trim();
-  const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
+function dateTimeFormat(timeZone: string): Intl.DateTimeFormatOptions {
+  return {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+}
+
+function toPickerInput(value: string) {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? value : '';
+}
+
+function formatTimeZoneLabel(value: string) {
+  if (value === 'Europe/Copenhagen') return 'CET/CEST (Europe/Copenhagen)';
+  return value === defaultTimeZone ? `${value} (local)` : value;
 }
 
 createRoot(document.getElementById('root')!).render(<App />);
