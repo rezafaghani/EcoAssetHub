@@ -28,7 +28,7 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 | `scheduler` | Queues ingestion jobs on schedule | internal |
 | `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
 | `postgres` | Scheduling, jobs, executions, and assets | `5432` |
-| `clickhouse` | Ingested dataset metadata and time-series data | `8123`, `9000` |
+| `clickhouse` | Ingested time-series data | `8123`, `9000` |
 | `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
 
 ## Curve-Scoped Ingestion
@@ -105,6 +105,7 @@ cd src/EcoAssetHub.Client && npm test
 ## Notes
 
 - Compose uses database name `ecoassethub` for PostgreSQL and ClickHouse.
+- Copy `.env.example` to `.env` and set the passwords before running compose.
 - The UI container installs npm 12 in its Node 24 build image before running `npm ci`.
 - Existing dataset metadata created before curve scoping may need re-ingestion/upsert to populate `CurveId`.
 - Current .NET builds may report NuGet audit warnings for transitive package vulnerabilities; treat those separately from compile errors.
