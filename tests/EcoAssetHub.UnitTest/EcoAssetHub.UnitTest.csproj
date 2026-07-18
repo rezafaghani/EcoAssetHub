@@ -29,10 +29,4 @@
     <ProjectReference Include="..\..\src\EcoAssetHub.Infrastructure\EcoAssetHub.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="TestData\570715000000088747.csv">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

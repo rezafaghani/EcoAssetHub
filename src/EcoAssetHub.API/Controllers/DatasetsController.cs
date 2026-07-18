@@ -51,17 +51,26 @@ public class DatasetsController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Series(
         [FromRoute] string id,
-        [FromQuery] DateTimeOffset start,
-        [FromQuery] DateTimeOffset end,
-        [FromQuery] DateTimeOffset? asOf,
+        [FromQuery] string start,
+        [FromQuery] string end,
+        [FromQuery] string? asOf,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(id) || start > end)
+        if (string.IsNullOrWhiteSpace(id)
+            || !DateTimeExpression.TryResolve(start, out var startTime)
+            || !DateTimeExpression.TryResolve(end, out var endTime)
+            || startTime > endTime)
         {
             return BadRequest("A valid dataset id and date range are required.");
         }
 
-        var points = await timeSeriesRepository.GetSeriesAsync(id, start, end, asOf, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(asOf) && !DateTimeExpression.TryResolve(asOf, out _))
+        {
+            return BadRequest("A valid asOf version time is required.");
+        }
+
+        DateTimeOffset? versionTime = string.IsNullOrWhiteSpace(asOf) ? null : DateTimeExpression.Resolve(asOf);
+        var points = await timeSeriesRepository.GetSeriesAsync(id, startTime, endTime, versionTime, cancellationToken);
         return Ok(points);
     }
 }

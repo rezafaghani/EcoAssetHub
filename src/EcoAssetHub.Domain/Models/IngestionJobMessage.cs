@@ -6,6 +6,7 @@ public class IngestionJobMessage
     public string JobId { get; set; } = string.Empty;
     public string ExecutionId { get; set; } = string.Empty;
     public string CurveId { get; set; } = string.Empty;
+    public string Source { get; set; } = "energy-charts";
     public string Endpoint { get; set; } = string.Empty;
     public Dictionary<string, string> Parameters { get; set; } = [];
     public int LookbackHours { get; set; }

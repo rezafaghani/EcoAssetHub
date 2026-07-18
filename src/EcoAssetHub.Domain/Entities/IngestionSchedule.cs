@@ -9,6 +9,7 @@ public class IngestionSchedule
     public string CronExpression { get; set; } = string.Empty;
     public string DefaultCronExpression { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
+    public string Source { get; set; } = "energy-charts";
     public string Endpoint { get; set; } = string.Empty;
     public Dictionary<string, string> Parameters { get; set; } = [];
     public int LookbackHours { get; set; } = 48;

@@ -147,10 +147,10 @@ function App() {
     setError('');
     try {
       const params = new URLSearchParams({
-        start: new Date(start).toISOString(),
-        end: new Date(end).toISOString()
+        start: toApiDateExpression(start),
+        end: toApiDateExpression(end)
       });
-      if (asOf) params.set('asOf', new Date(asOf).toISOString());
+      if (asOf) params.set('asOf', toApiDateExpression(asOf));
       const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/series?${params}`);
       if (!response.ok) throw new Error('Series request failed');
       setSeries(await response.json() as TimeSeriesPoint[]);
@@ -319,9 +319,9 @@ function App() {
           </div>
 
           <div className="range-toolbar">
-            <label><span>Start</span><input type="datetime-local" value={start} onChange={event => setStart(event.target.value)} /></label>
-            <label><span>End</span><input type="datetime-local" value={end} onChange={event => setEnd(event.target.value)} /></label>
-            <label><span>As of</span><input type="datetime-local" value={asOf} onChange={event => setAsOf(event.target.value)} /></label>
+            <label><span>Start</span><input value={start} onChange={event => setStart(event.target.value)} placeholder="today-1 or exact time" /></label>
+            <label><span>End</span><input value={end} onChange={event => setEnd(event.target.value)} placeholder="now, today+1, or exact time" /></label>
+            <label><span>Version time</span><input value={asOf} onChange={event => setAsOf(event.target.value)} placeholder="empty for latest, now, or exact time" /></label>
             <label className="live-toggle">
               <input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)} />
               Live
@@ -906,6 +906,12 @@ function equalsStatus(value: string, expected: string) {
 function toLocalInput(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function toApiDateExpression(value: string) {
+  const trimmed = value.trim();
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
 }
 
 createRoot(document.getElementById('root')!).render(<App />);

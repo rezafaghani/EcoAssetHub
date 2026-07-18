@@ -22,17 +22,26 @@ public class CurvesController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Series(
         [FromRoute] long meterPointId,
-        [FromQuery] DateTimeOffset start,
-        [FromQuery] DateTimeOffset end,
-        [FromQuery] DateTimeOffset? asOf,
+        [FromQuery] string start,
+        [FromQuery] string end,
+        [FromQuery] string? asOf,
         CancellationToken cancellationToken)
     {
-        if (meterPointId <= 0 || start > end)
+        if (meterPointId <= 0
+            || !DateTimeExpression.TryResolve(start, out var startTime)
+            || !DateTimeExpression.TryResolve(end, out var endTime)
+            || startTime > endTime)
         {
             return BadRequest("A valid meterPointId and date range are required.");
         }
 
-        var points = await productionRepository.GetSeriesAsync(meterPointId, start, end, asOf, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(asOf) && !DateTimeExpression.TryResolve(asOf, out _))
+        {
+            return BadRequest("A valid asOf version time is required.");
+        }
+
+        DateTimeOffset? versionTime = string.IsNullOrWhiteSpace(asOf) ? null : DateTimeExpression.Resolve(asOf);
+        var points = await productionRepository.GetSeriesAsync(meterPointId, startTime, endTime, versionTime, cancellationToken);
         return Ok(points);
     }
 }

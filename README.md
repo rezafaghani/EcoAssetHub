@@ -5,8 +5,9 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 ## What It Does
 
 - Search Energy Charts curves and datasets by endpoint, metric, curve id, or identifier.
-- Inspect production and forecast time-series data in charts and tables.
+- Inspect current or historical production and forecast time-series versions in charts and tables.
 - Track each curve's ingestion schedules, queued jobs, executions, inserted rows, skipped rows, and failures.
+- Edit ingestion schedules, reset their default cron/window, and queue one-time backload jobs.
 - Run the full stack locally with Compose.
 
 ## Stack
@@ -23,13 +24,24 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 | Service | Purpose | Port |
 | --- | --- | --- |
 | `ui` | React/Vite app served by Nginx | `8080` |
-| `api` | Main HTTP API, dataset reads, and time-series reads | `5100` |
+| `api` | Main HTTP API, dataset reads, historical time-series reads, and ingestion control | `5100` |
 | `insert` | Insert API plus gRPC ingestion endpoint | `5101`, `5103` |
 | `scheduler` | Queues ingestion jobs on schedule | internal |
 | `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
 | `postgres` | Scheduling, jobs, executions, and assets | `5432` |
 | `clickhouse` | Ingested time-series data | `8123`, `9000` |
 | `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
+
+## Time-Series Reads
+
+Series endpoints accept exact datetimes or simple UTC expressions for `start`, `end`, and `asOf`:
+
+```text
+GET /api/datasets/{datasetId}/series?start=today-1&end=now&asOf=today
+GET /api/curves/{meterPointId}/series?start=2026-07-18T00:00:00Z&end=2026-07-19T00:00:00Z&asOf=now
+```
+
+Supported expressions are `now`, `today`, `today+N`, `today-N`, `now+Nh`, and `now-Nh`. `asOf` means version time: the API returns the newest value inserted at or before that time. Omit `asOf` for the latest version.
 
 ## Curve-Scoped Ingestion
 
@@ -42,9 +54,14 @@ GET /api/datasets?curveId={curveId}
 GET /api/ingestion/curves/{curveId}/schedules
 GET /api/ingestion/curves/{curveId}/jobs
 GET /api/ingestion/curves/{curveId}/executions
+PUT /api/ingestion/schedules/{scheduleId}
+POST /api/ingestion/schedules/{scheduleId}/reset
+POST /api/ingestion/schedules/{scheduleId}/backloads
 ```
 
 Older global ingestion endpoints still exist for compatibility, but the UI uses the curve-scoped endpoints.
+
+Schedules and jobs carry a `Source`. The current implemented source is `energy-charts`; adding FTP, Selenium, or another source should add a source-specific ingestion implementation and route by that field, while keeping metadata in PostgreSQL and time-series values in ClickHouse.
 
 ## Run With Compose
 

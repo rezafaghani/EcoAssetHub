@@ -107,6 +107,7 @@ function schedule(id: string): IngestionSchedule {
     cronExpression: '*/15 * * * *',
     defaultCronExpression: '*/15 * * * *',
     enabled: true,
+    source: 'energy-charts',
     endpoint: 'public_power',
     parameters: {},
     lookbackHours: 48,

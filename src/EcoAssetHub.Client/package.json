@@ -15,13 +15,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.9.3",
-    "vite": "^7.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.0.0"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "vitest": "^4.0.0"

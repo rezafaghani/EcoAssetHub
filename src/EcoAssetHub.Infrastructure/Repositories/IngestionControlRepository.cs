@@ -108,11 +108,11 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         {
             await using var command = context.Postgres.CreateCommand("""
                 INSERT INTO ingestion_schedules (
-                    id, curve_id, name, cron_expression, default_cron_expression, enabled, endpoint, parameters,
+                    id, curve_id, name, cron_expression, default_cron_expression, enabled, source, endpoint, parameters,
                     lookback_hours, window_start_expression, window_end_expression, default_window_start_expression,
                     default_window_end_expression, batch_size, last_queued_at, created_at, updated_at)
                 VALUES (
-                    @id, @curve_id, @name, @cron_expression, @default_cron_expression, @enabled, @endpoint, @parameters,
+                    @id, @curve_id, @name, @cron_expression, @default_cron_expression, @enabled, @source, @endpoint, @parameters,
                     @lookback_hours, @window_start_expression, @window_end_expression, @default_window_start_expression,
                     @default_window_end_expression, @batch_size, @last_queued_at, @created_at, @updated_at)
                 ON CONFLICT (id) DO UPDATE SET
@@ -120,6 +120,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
                     name = EXCLUDED.name,
                     cron_expression = CASE WHEN ingestion_schedules.cron_expression = '* * * * *' THEN EXCLUDED.cron_expression ELSE ingestion_schedules.cron_expression END,
                     default_cron_expression = EXCLUDED.default_cron_expression,
+                    source = EXCLUDED.source,
                     endpoint = EXCLUDED.endpoint,
                     parameters = EXCLUDED.parameters,
                     lookback_hours = CASE WHEN ingestion_schedules.cron_expression = '* * * * *' THEN EXCLUDED.lookback_hours ELSE ingestion_schedules.lookback_hours END,
@@ -220,6 +221,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             JobId = job.Id,
             ExecutionId = execution.Id,
             CurveId = schedule.CurveId,
+            Source = schedule.Source,
             Endpoint = schedule.Endpoint,
             Parameters = schedule.Parameters,
             LookbackHours = schedule.LookbackHours,
@@ -232,6 +234,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
     public async Task<IngestionJobMessage> CreateBackloadJobAsync(
         IngestionSchedule schedule,
         string endpoint,
+        string source,
         Dictionary<string, string> parameters,
         string windowStartExpression,
         string windowEndExpression,
@@ -270,6 +273,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
             JobId = job.Id,
             ExecutionId = execution.Id,
             CurveId = schedule.CurveId,
+            Source = source,
             Endpoint = endpoint,
             Parameters = parameters,
             LookbackHours = schedule.LookbackHours,
@@ -311,7 +315,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
     private async Task<List<IngestionSchedule>> QuerySchedulesAsync(string suffix, List<NpgsqlParameter> parameters, CancellationToken cancellationToken)
     {
         var sql = $"""
-            SELECT id, curve_id, name, cron_expression, enabled, endpoint, parameters,
+            SELECT id, curve_id, name, cron_expression, enabled, source, endpoint, parameters,
                    lookback_hours, batch_size, last_queued_at, created_at, updated_at,
                    default_cron_expression, window_start_expression, window_end_expression,
                    default_window_start_expression, default_window_end_expression
@@ -332,19 +336,20 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
                 CurveId = reader.GetString(1),
                 Name = reader.GetString(2),
                 CronExpression = reader.GetString(3),
-                DefaultCronExpression = reader.GetString(12),
                 Enabled = reader.GetBoolean(4),
-                Endpoint = reader.GetString(5),
-                Parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(6)) ?? [],
-                LookbackHours = reader.GetInt32(7),
-                BatchSize = reader.GetInt32(8),
-                LastQueuedAt = reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
-                CreatedAt = reader.GetFieldValue<DateTimeOffset>(10),
-                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(11),
-                WindowStartExpression = reader.GetString(13),
-                WindowEndExpression = reader.GetString(14),
-                DefaultWindowStartExpression = reader.GetString(15),
-                DefaultWindowEndExpression = reader.GetString(16)
+                Source = reader.GetString(5),
+                Endpoint = reader.GetString(6),
+                Parameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(7)) ?? [],
+                LookbackHours = reader.GetInt32(8),
+                BatchSize = reader.GetInt32(9),
+                LastQueuedAt = reader.IsDBNull(10) ? null : reader.GetFieldValue<DateTimeOffset>(10),
+                CreatedAt = reader.GetFieldValue<DateTimeOffset>(11),
+                UpdatedAt = reader.GetFieldValue<DateTimeOffset>(12),
+                DefaultCronExpression = reader.GetString(13),
+                WindowStartExpression = reader.GetString(14),
+                WindowEndExpression = reader.GetString(15),
+                DefaultWindowStartExpression = reader.GetString(16),
+                DefaultWindowEndExpression = reader.GetString(17)
             });
         }
 
@@ -378,6 +383,7 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         command.Parameters.AddWithValue("cron_expression", schedule.CronExpression);
         command.Parameters.AddWithValue("default_cron_expression", string.IsNullOrWhiteSpace(schedule.DefaultCronExpression) ? schedule.CronExpression : schedule.DefaultCronExpression);
         command.Parameters.AddWithValue("enabled", schedule.Enabled);
+        command.Parameters.AddWithValue("source", schedule.Source);
         command.Parameters.AddWithValue("endpoint", schedule.Endpoint);
         command.Parameters.Add(new NpgsqlParameter("parameters", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(schedule.Parameters) });
         command.Parameters.AddWithValue("lookback_hours", schedule.LookbackHours);

@@ -1,5 +1,5 @@
 using System.Web;
-using System.Text.RegularExpressions;
+using EcoAssetHub.Domain.Models;
 
 namespace EcoAssetHub.Ingestion.Services;
 
@@ -68,38 +68,11 @@ public static class EnergyChartsDefaults
             Parameters = new Dictionary<string, string>(definition.Parameters)
         };
         var now = DateTimeOffset.UtcNow;
-        var start = ResolveTimeExpression(startExpression, now);
-        var end = ResolveTimeExpression(endExpression, now);
+        var start = DateTimeExpression.Resolve(startExpression, now);
+        var end = DateTimeExpression.Resolve(endExpression, now);
         copy.Parameters["start"] = FormatTimestamp(start);
         copy.Parameters["end"] = FormatTimestamp(end);
         return copy;
-    }
-
-    public static DateTimeOffset ResolveTimeExpression(string expression, DateTimeOffset now)
-    {
-        if (DateTimeOffset.TryParse(expression, out var explicitTime))
-        {
-            return explicitTime.ToUniversalTime();
-        }
-
-        var value = expression.Trim().ToLowerInvariant();
-        var match = Regex.Match(value, "^(now|today)([+-]\\d+)?([hd])?$");
-        if (!match.Success)
-        {
-            throw new InvalidOperationException($"Time expression '{expression}' is not supported.");
-        }
-
-        var baseTime = match.Groups[1].Value == "today"
-            ? new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero)
-            : now;
-        if (!match.Groups[2].Success)
-        {
-            return baseTime;
-        }
-
-        var amount = int.Parse(match.Groups[2].Value);
-        var unit = match.Groups[3].Success ? match.Groups[3].Value : "d";
-        return unit == "h" ? baseTime.AddHours(amount) : baseTime.AddDays(amount);
     }
 
     public static string CreateDefinitionKey(EnergyChartsDatasetDefinition definition)

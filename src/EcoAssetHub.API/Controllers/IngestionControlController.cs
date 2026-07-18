@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using EcoAssetHub.Domain.Entities;
 using EcoAssetHub.Domain.Models;
 using EcoAssetHub.Infrastructure.Services;
@@ -119,7 +118,7 @@ public class IngestionControlController(
             return BadRequest("Batch size must be at least 1.");
         }
 
-        if (!IsTimeExpression(request.WindowStartExpression) || !IsTimeExpression(request.WindowEndExpression))
+        if (!DateTimeExpression.TryResolve(request.WindowStartExpression, out _) || !DateTimeExpression.TryResolve(request.WindowEndExpression, out _))
         {
             return BadRequest("Use now, today, today-1, today+1, now-48h, or an ISO timestamp for the period.");
         }
@@ -139,6 +138,7 @@ public class IngestionControlController(
         var message = await repository.CreateBackloadJobAsync(
             schedule,
             metadata.Endpoint,
+            metadata.Source,
             WithoutDateRange(metadata.RequestParameters),
             request.WindowStartExpression.Trim(),
             request.WindowEndExpression.Trim(),
@@ -167,18 +167,12 @@ public class IngestionControlController(
             return "Window start and end expressions are required.";
         }
 
-        if (!IsTimeExpression(request.WindowStartExpression) || !IsTimeExpression(request.WindowEndExpression))
+        if (!DateTimeExpression.TryResolve(request.WindowStartExpression, out _) || !DateTimeExpression.TryResolve(request.WindowEndExpression, out _))
         {
             return "Use now, today, today-1, today+1, now-48h, or an ISO timestamp for the window.";
         }
 
         return request.BatchSize < 1 ? "Batch size must be at least 1." : null;
-    }
-
-    private static bool IsTimeExpression(string value)
-    {
-        return DateTimeOffset.TryParse(value, out _)
-            || Regex.IsMatch(value.Trim(), "^(now|today)([+-]\\d+)?([hd])?$", RegexOptions.IgnoreCase);
     }
 
     private static bool LooksLikeFiveFieldCron(string value)

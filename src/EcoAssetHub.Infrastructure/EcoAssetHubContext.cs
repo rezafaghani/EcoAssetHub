@@ -60,6 +60,7 @@ public sealed class EcoAssetHubContext
                 cron_expression text NOT NULL,
                 default_cron_expression text NOT NULL DEFAULT '',
                 enabled boolean NOT NULL,
+                source text NOT NULL DEFAULT 'energy-charts',
                 endpoint text NOT NULL,
                 parameters jsonb NOT NULL,
                 lookback_hours integer NOT NULL,
@@ -136,6 +137,7 @@ public sealed class EcoAssetHubContext
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_end_expression text NOT NULL DEFAULT 'now';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_start_expression text NOT NULL DEFAULT 'now-48h';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_end_expression text NOT NULL DEFAULT 'now';
+            ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'energy-charts';
             """;
 
         await using var command = Postgres.CreateCommand(sql);
