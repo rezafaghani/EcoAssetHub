@@ -35,7 +35,11 @@ public class EnergyChartsDatasetGrain(
                 Parameters = message.Parameters
             };
 
-            var effectiveDefinition = EnergyChartsDefaults.WithDateRange(definition, message.LookbackHours > 0 ? message.LookbackHours : options.Value.LookbackHours);
+            var startExpression = string.IsNullOrWhiteSpace(message.WindowStartExpression)
+                ? $"now-{Math.Max(message.LookbackHours > 0 ? message.LookbackHours : options.Value.LookbackHours, 1)}h"
+                : message.WindowStartExpression;
+            var endExpression = string.IsNullOrWhiteSpace(message.WindowEndExpression) ? "now" : message.WindowEndExpression;
+            var effectiveDefinition = EnergyChartsDefaults.WithDateRange(definition, startExpression, endExpression);
             using var document = await energyChartsClient.GetAsync(effectiveDefinition, cancellationToken);
             var datasets = normalizer.Normalize(effectiveDefinition, document.RootElement);
 

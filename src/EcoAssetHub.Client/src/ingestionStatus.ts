@@ -3,10 +3,15 @@ export interface IngestionSchedule {
   curveId: string;
   name: string;
   cronExpression: string;
+  defaultCronExpression: string;
   enabled: boolean;
   endpoint: string;
   parameters: Record<string, string>;
   lookbackHours: number;
+  windowStartExpression: string;
+  windowEndExpression: string;
+  defaultWindowStartExpression: string;
+  defaultWindowEndExpression: string;
   batchSize: number;
   lastQueuedAt?: string | null;
   updatedAt: string;
@@ -85,7 +90,7 @@ export function buildScheduleStatusRows(
     return {
       id: schedule.id,
       name: schedule.name || schedule.curveId,
-      detail: `${schedule.endpoint} · ${schedule.cronExpression}`,
+      detail: `${schedule.endpoint} · ${schedule.cronExpression} · ${schedule.windowStartExpression} -> ${schedule.windowEndExpression}`,
       enabled: schedule.enabled,
       scheduleStatus: schedule.enabled ? 'enabled' : 'disabled',
       displayStatus,
@@ -114,6 +119,22 @@ export function buildScheduleJobHistoryRows(scheduleId: string, jobs: IngestionJ
     jobs.filter(job => job.scheduleId === scheduleId),
     executions.filter(execution => execution.scheduleId === scheduleId)
   );
+}
+
+export function suggestCronFromGranularity(granularity: string) {
+  const value = granularity.toLowerCase().replace(/\s+/g, '');
+  const minuteMatch = value.match(/^(\d+)(min|minute|minutes)$/);
+  if (minuteMatch) {
+    const minutes = Math.max(Number(minuteMatch[1]), 1);
+    if (minutes < 60) return `*/${minutes} * * * *`;
+    if (minutes % 60 === 0) return `0 */${minutes / 60} * * *`;
+    return '';
+  }
+
+  if (value === 'hour' || value === 'hourly' || value === '1h') return '0 * * * *';
+  if (value === 'day' || value === 'daily' || value === '1d') return '0 3 * * *';
+  if (value === 'year' || value === 'yearly' || value === '1y') return '0 3 1 1 *';
+  return '';
 }
 
 function latestBy<T>(items: T[], key: (item: T) => string, time: (item: T) => string) {

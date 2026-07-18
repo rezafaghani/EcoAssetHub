@@ -528,6 +528,7 @@ svg text {
 .table-action {
   padding: 0.2rem var(--space-2);
   font-size: 0.76rem;
+  margin-left: var(--space-1);
 }
 
 .icon-button {
@@ -617,6 +618,65 @@ svg text {
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+}
+
+.form-modal {
+  width: min(720px, 100%);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.form-grid label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--label);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.form-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.form-grid small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.switch-row {
+  grid-column: 1 / -1;
+  display: inline-flex !important;
+  align-items: center;
+  gap: var(--space-2) !important;
+}
+
+.switch-row input {
+  width: auto;
+  min-height: auto;
+}
+
+.preset-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.modal-actions .muted {
+  margin-right: auto;
+  font-size: 0.82rem;
 }
 
 .modal-header h3,

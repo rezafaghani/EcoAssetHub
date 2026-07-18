@@ -1,7 +1,10 @@
 using EcoAssetHub.Domain.Entities;
 using EcoAssetHub.Domain.Interfaces;
 using EcoAssetHub.API.Controllers;
+using EcoAssetHub.Domain.Models;
+using EcoAssetHub.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace EcoAssetHub.UnitTest.Controllers;
 
@@ -21,7 +24,7 @@ public class IngestionControlControllerTests
         repository.Setup(x => x.GetExecutionsAsync(null, null, curveId, cancellationToken))
             .ReturnsAsync([new IngestionExecution { CurveId = curveId }]);
 
-        var controller = new IngestionControlController(repository.Object);
+        var controller = CreateController(repository);
 
         Assert.Single(Assert.IsType<OkObjectResult>(await controller.CurveSchedules(curveId, cancellationToken)).Value as List<IngestionSchedule> ?? []);
         Assert.Single(Assert.IsType<OkObjectResult>(await controller.CurveJobs(curveId, cancellationToken)).Value as List<IngestionJob> ?? []);
@@ -30,5 +33,54 @@ public class IngestionControlControllerTests
         repository.Verify(x => x.GetSchedulesAsync(curveId, cancellationToken), Times.Once);
         repository.Verify(x => x.GetJobsAsync(null, curveId, cancellationToken), Times.Once);
         repository.Verify(x => x.GetExecutionsAsync(null, null, curveId, cancellationToken), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateSchedule_RejectsInvalidCron()
+    {
+        var repository = new Mock<IIngestionControlRepository>();
+        var cancellationToken = CancellationToken.None;
+        repository.Setup(x => x.GetScheduleAsync("schedule-1", cancellationToken))
+            .ReturnsAsync(new IngestionSchedule { Id = "schedule-1" });
+
+        var result = await CreateController(repository).UpdateSchedule(
+            "schedule-1",
+            new UpdateIngestionScheduleRequest("not-a-cron", true, "today-1", "today", 500),
+            cancellationToken);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        repository.Verify(x => x.UpdateScheduleAsync(It.IsAny<IngestionSchedule>(), cancellationToken), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateSchedule_SavesWindowAndCron()
+    {
+        var repository = new Mock<IIngestionControlRepository>();
+        var cancellationToken = CancellationToken.None;
+        repository.Setup(x => x.GetScheduleAsync("schedule-1", cancellationToken))
+            .ReturnsAsync(new IngestionSchedule { Id = "schedule-1" });
+        repository.Setup(x => x.UpdateScheduleAsync(It.IsAny<IngestionSchedule>(), cancellationToken))
+            .ReturnsAsync((IngestionSchedule schedule, CancellationToken _) => schedule);
+
+        var result = await CreateController(repository).UpdateSchedule(
+            "schedule-1",
+            new UpdateIngestionScheduleRequest("*/15 * * * *", true, "today-1", "today+1", 250),
+            cancellationToken);
+
+        Assert.IsType<OkObjectResult>(result);
+        repository.Verify(x => x.UpdateScheduleAsync(
+            It.Is<IngestionSchedule>(schedule =>
+                schedule.CronExpression == "*/15 * * * *"
+                && schedule.WindowStartExpression == "today-1"
+                && schedule.WindowEndExpression == "today+1"
+                && schedule.BatchSize == 250),
+            cancellationToken), Times.Once);
+    }
+
+    private static IngestionControlController CreateController(Mock<IIngestionControlRepository> repository)
+    {
+        var datasets = new Mock<IDatasetRepository>();
+        var publisher = new RabbitMqJobPublisher(Options.Create(new RabbitMqOptions()));
+        return new IngestionControlController(repository.Object, datasets.Object, publisher);
     }
 }

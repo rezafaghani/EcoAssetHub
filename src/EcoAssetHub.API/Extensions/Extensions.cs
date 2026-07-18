@@ -1,5 +1,7 @@
 ﻿using EcoAssetHub.API.Infrastructure.Services;
+using EcoAssetHub.Domain.Models;
 using EcoAssetHub.Infrastructure.Repositories;
+using EcoAssetHub.Infrastructure.Services;
 
 namespace EcoAssetHub.API.Extensions;
 
@@ -9,6 +11,7 @@ internal static class Extensions
     {
         var services = builder.Services;
 
+        services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
         builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
         {
             var configuration = sp.GetService<IConfiguration>();
@@ -27,6 +30,7 @@ internal static class Extensions
         services.AddScoped<IDatasetRepository, DatasetRepository>();
         services.AddScoped<ITimeSeriesRepository, TimeSeriesRepository>();
         services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
+        services.AddSingleton<RabbitMqJobPublisher>();
         services.AddSingleton<ICacheService, CacheService>();
         services.AddMemoryCache();
     }

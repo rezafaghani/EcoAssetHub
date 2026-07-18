@@ -56,6 +56,11 @@ services:
     environment:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__UserName: ${RABBITMQ_USER:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RabbitMq__QueueName: ecoassethub.ingestion.jobs
     ports:
       - "5100:8080"
     restart: unless-stopped
@@ -63,6 +68,8 @@ services:
       postgres:
         condition: service_healthy
       clickhouse:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   insert:
