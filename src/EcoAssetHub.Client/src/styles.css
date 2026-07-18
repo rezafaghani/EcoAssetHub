@@ -481,12 +481,6 @@ svg text {
   font-size: 0.78rem;
 }
 
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
 .status-table {
   min-width: 0;
 }
@@ -505,6 +499,7 @@ svg text {
 }
 
 .status-table td small {
+  display: block;
   color: var(--muted);
   margin-top: var(--space-1);
 }
@@ -517,6 +512,32 @@ svg text {
 .compact th,
 .compact td {
   padding: var(--space-2);
+}
+
+.table-action,
+.icon-button {
+  min-height: 1.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--label);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.table-action {
+  padding: 0.2rem var(--space-2);
+  font-size: 0.76rem;
+}
+
+.icon-button {
+  width: 2rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.muted {
+  color: var(--muted);
 }
 
 .status-badge {
@@ -544,8 +565,18 @@ svg text {
   color: #175cd3;
 }
 
+.status-badge.working {
+  background: #e0f2fe;
+  color: #075985;
+}
+
 .status-badge.queued {
   background: #fef0c7;
+  color: #b54708;
+}
+
+.status-badge.retrying {
+  background: #fffaeb;
   color: #b54708;
 }
 
@@ -557,6 +588,45 @@ svg text {
 
 .metadata-panel {
   padding: var(--space-2);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(16 24 40 / 0.42);
+}
+
+.modal-panel {
+  width: min(920px, 100%);
+  max-height: min(720px, calc(100vh - 2rem));
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 18px 40px rgb(16 24 40 / 0.18);
+  padding: var(--space-3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.modal-header h3,
+.modal-header p {
+  margin: 0;
+}
+
+.modal-header p {
+  margin-top: var(--space-1);
+  color: var(--muted);
 }
 
 .table-panel {
@@ -635,9 +705,6 @@ th {
     align-self: stretch;
   }
 
-  .status-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 959px) {
