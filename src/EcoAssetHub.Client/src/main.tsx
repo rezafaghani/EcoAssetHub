@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getDatasetCurveId, groupDatasetsByCurve } from './curves';
+import { buildScheduleJobHistoryRows, buildScheduleStatusRows, type IngestionExecution, type IngestionJob, type IngestionSchedule, type ScheduleStatusRow } from './ingestionStatus';
 import './styles.css';
 
 interface DatasetMetadata {
@@ -28,45 +29,6 @@ interface TimeSeriesPoint {
   timestamp: string;
   value: number | null;
   asOf: string;
-}
-
-interface IngestionSchedule {
-  id: string;
-  curveId: string;
-  name: string;
-  cronExpression: string;
-  enabled: boolean;
-  endpoint: string;
-  parameters: Record<string, string>;
-  lookbackHours: number;
-  batchSize: number;
-  lastQueuedAt?: string | null;
-  updatedAt: string;
-}
-
-interface IngestionJob {
-  id: string;
-  scheduleId: string;
-  curveId: string;
-  status: string;
-  queuedAt: string;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-  error: string;
-}
-
-interface IngestionExecution {
-  id: string;
-  jobId: string;
-  scheduleId: string;
-  curveId: string;
-  status: string;
-  createdAt: string;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-  inserted: number;
-  skipped: number;
-  error: string;
 }
 
 interface ChartPoint {
@@ -397,48 +359,38 @@ function IngestionStatusPanel({
   executions: IngestionExecution[];
   latestExecution?: IngestionExecution;
 }) {
+  const [historyScheduleId, setHistoryScheduleId] = useState('');
+  const scheduleRows = buildScheduleStatusRows(schedules, jobs, executions);
+  const historySchedule = scheduleRows.find(row => row.id === historyScheduleId);
+  const historyRows = historyScheduleId ? buildScheduleJobHistoryRows(historyScheduleId, jobs, executions).slice(0, 20) : [];
+  const healthySchedules = scheduleRows.filter(row => row.displayStatus === 'completed' || row.displayStatus === 'working').length;
+  const failedSchedules = scheduleRows.filter(row => row.displayStatus === 'failed' || row.displayStatus === 'retrying').length;
+
   return (
     <section className="ingestion-panel">
       <header className="section-heading">
         <div>
           <h2>Curve ingestion</h2>
-          <p>{curveId ? `${curveId} · ` : ''}{schedules.length} schedules · {jobs.length} jobs · {executions.length} executions</p>
+          <p>{curveId ? `${curveId} · ` : ''}{schedules.length} schedules · latest result by schedule</p>
         </div>
         {latestExecution && <StatusBadge status={latestExecution.status} />}
       </header>
 
       <div className="status-summary">
         <MetricTile className="metric-tile-compact" label="Enabled schedules" value={schedules.filter(x => x.enabled).length.toString()} />
-        <MetricTile label="Running jobs" value={jobs.filter(x => equalsStatus(x.status, 'running')).length.toString()} />
-        <MetricTile label="Failed executions" value={executions.filter(x => equalsStatus(x.status, 'failed')).length.toString()} />
+        <MetricTile label="Healthy schedules" value={healthySchedules.toString()} />
+        <MetricTile label="Needs attention" value={failedSchedules.toString()} />
         <MetricTile label="Latest inserted" value={(latestExecution?.inserted ?? 0).toLocaleString()} />
       </div>
 
-      <div className="status-grid">
-        <StatusTable title="Schedules" rows={schedules.slice(0, 8).map(schedule => ({
-          id: schedule.id,
-          primary: schedule.name || schedule.curveId,
-          secondary: `${schedule.endpoint} · ${schedule.cronExpression}`,
-          status: schedule.enabled ? 'enabled' : 'disabled',
-          time: schedule.lastQueuedAt ? formatDate(schedule.lastQueuedAt) : ''
-        }))} />
-        <StatusTable title="Jobs" rows={jobs.slice(0, 8).map(job => ({
-          id: job.id,
-          primary: job.id,
-          secondary: job.scheduleId,
-          status: job.status,
-          time: formatDate(job.queuedAt),
-          error: job.error
-        }))} />
-        <StatusTable title="Executions" rows={executions.slice(0, 8).map(execution => ({
-          id: execution.id,
-          primary: execution.id,
-          secondary: `${execution.inserted.toLocaleString()} inserted · ${execution.skipped.toLocaleString()} skipped`,
-          status: execution.status,
-          time: formatDate(execution.createdAt),
-          error: execution.error
-        }))} />
-      </div>
+      <ScheduleStatusTable rows={scheduleRows} onOpenHistory={setHistoryScheduleId} />
+      {historySchedule && (
+        <ScheduleHistoryModal
+          schedule={historySchedule}
+          rows={historyRows}
+          onClose={() => setHistoryScheduleId('')}
+        />
+      )}
     </section>
   );
 }
@@ -452,28 +404,37 @@ function MetricTile({ label, value, className = '' }: { label: string; value: st
   );
 }
 
-function StatusTable({
-  title,
-  rows
+function ScheduleStatusTable({
+  rows,
+  onOpenHistory
 }: {
-  title: string;
-  rows: Array<{ id: string; primary: string; secondary: string; status: string; time: string; error?: string }>;
+  rows: ReturnType<typeof buildScheduleStatusRows>;
+  onOpenHistory: (scheduleId: string) => void;
 }) {
   return (
     <section className="status-table">
-      <h3>{title}</h3>
+      <h3>Schedule status</h3>
       <div className="table-scroll compact">
         <table>
-          <thead><tr><th>Name</th><th>Status</th><th>Time</th></tr></thead>
+          <thead><tr><th>Schedule</th><th>Latest result</th><th>Last queued</th><th>Rows</th><th></th></tr></thead>
           <tbody>
             {rows.map(row => (
-              <tr key={row.id} title={row.error || row.id}>
+              <tr key={row.id} title={row.latestExecution?.error || row.latestJob?.error || row.id}>
                 <td>
-                  <strong>{row.primary}</strong>
-                  <small>{row.error || row.secondary}</small>
+                  <strong>{row.name}</strong>
+                  <small>{row.detail}</small>
                 </td>
-                <td><StatusBadge status={row.status} /></td>
-                <td>{row.time}</td>
+                <td>
+                  <StatusBadge status={row.displayStatus} />
+                  <small>{row.displayExecution?.error || row.latestExecution?.error || row.latestJob?.error || row.latestJob?.id || 'No jobs yet'}</small>
+                </td>
+                <td>{row.latestJob?.queuedAt ? formatDate(row.latestJob.queuedAt) : (row.latestJob ? '' : 'Never')}</td>
+                <td>{row.displayExecution ? `${row.displayExecution.inserted.toLocaleString()} inserted · ${row.displayExecution.skipped.toLocaleString()} skipped` : ''}</td>
+                <td>
+                  <button className="table-action" type="button" onClick={() => onOpenHistory(row.id)}>
+                    History
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -483,8 +444,55 @@ function StatusTable({
   );
 }
 
+function ScheduleHistoryModal({
+  schedule,
+  rows,
+  onClose
+}: {
+  schedule: ScheduleStatusRow;
+  rows: ReturnType<typeof buildScheduleJobHistoryRows>;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="schedule-history-title" onClick={event => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <h3 id="schedule-history-title">Schedule history</h3>
+            <p>{schedule.name} · {schedule.detail}</p>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close history">×</button>
+        </header>
+
+        <div className="table-scroll compact">
+          <table>
+            <thead><tr><th>Job</th><th>Job status</th><th>Latest execution</th><th>Result</th></tr></thead>
+            <tbody>
+              {rows.map(row => (
+                <tr key={row.id} title={row.latestExecution?.error || row.job.error || row.id}>
+                  <td>
+                    <strong>{formatDate(row.job.queuedAt)}</strong>
+                    <small>{row.job.id}</small>
+                  </td>
+                  <td><StatusBadge status={row.job.status} /></td>
+                  <td>
+                    {row.latestExecution ? <StatusBadge status={row.latestExecution.status} /> : <span className="muted">No execution</span>}
+                    <small>{row.latestExecution?.error || row.job.error || row.job.scheduleId}</small>
+                  </td>
+                  <td>{row.latestExecution ? `${row.latestExecution.inserted.toLocaleString()} inserted · ${row.latestExecution.skipped.toLocaleString()} skipped` : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!rows.length && <p className="empty-state">No jobs for this schedule yet.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
-  return <span className={`status-badge ${status.toLowerCase()}`}>{status}</span>;
+  return <span className={`status-badge ${status.toLowerCase()}`}>{status || 'unknown'}</span>;
 }
 
 function MetadataPanel({ dataset, curveId, datasetCount }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number }) {
