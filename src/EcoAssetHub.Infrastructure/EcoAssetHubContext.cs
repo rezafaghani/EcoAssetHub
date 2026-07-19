@@ -114,6 +114,8 @@ public sealed class EcoAssetHubContext
                 source text NOT NULL,
                 endpoint text NOT NULL,
                 metric text NOT NULL,
+                data_kind text NOT NULL DEFAULT 'actual',
+                category text NOT NULL DEFAULT 'unknown',
                 unit text NOT NULL,
                 country text NOT NULL,
                 bidding_zone text NOT NULL,
@@ -130,7 +132,7 @@ public sealed class EcoAssetHubContext
             );
 
             CREATE INDEX IF NOT EXISTS ix_energy_datasets_filters
-                ON energy_datasets(endpoint, curve_id, metric, country, bidding_zone, region, granularity);
+                ON energy_datasets(endpoint, curve_id, metric, data_kind, category, country, bidding_zone, region, granularity);
 
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_cron_expression text NOT NULL DEFAULT '';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_start_expression text NOT NULL DEFAULT 'now-48h';
@@ -138,6 +140,26 @@ public sealed class EcoAssetHubContext
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_start_expression text NOT NULL DEFAULT 'now-48h';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_window_end_expression text NOT NULL DEFAULT 'now';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'energy-charts';
+            ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS data_kind text NOT NULL DEFAULT 'actual';
+            ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'unknown';
+
+            UPDATE energy_datasets
+            SET data_kind = CASE
+                    WHEN forecast_type <> '' OR metric LIKE '%forecast%' THEN 'forecast'
+                    WHEN endpoint = 'installed_power' THEN 'reference'
+                    ELSE data_kind
+                END,
+                category = CASE
+                    WHEN endpoint IN ('public_power', 'total_power', 'public_power_forecast') THEN 'power'
+                    WHEN endpoint = 'installed_power' THEN 'capacity'
+                    WHEN endpoint = 'price' THEN 'price'
+                    WHEN endpoint IN ('cbet', 'cbpf') THEN 'exchange'
+                    WHEN endpoint LIKE '%share%' THEN 'share'
+                    WHEN endpoint = 'frequency' THEN 'frequency'
+                    WHEN endpoint = 'signal' THEN 'signal'
+                    ELSE category
+                END
+            WHERE data_kind = 'actual' OR category = 'unknown';
             """;
 
         await using var command = Postgres.CreateCommand(sql);
@@ -150,7 +172,20 @@ public sealed class EcoAssetHubContext
         await connection.OpenAsync(cancellationToken);
 
         await ExecuteClickHouseAsync(connection, """
-            CREATE TABLE IF NOT EXISTS energy_time_series_points (
+            CREATE TABLE IF NOT EXISTS actual_energy_time_series_points (
+                dataset_id String,
+                timestamp DateTime64(3, 'UTC'),
+                value Nullable(Float64),
+                as_of DateTime64(3, 'UTC'),
+                inserted_at DateTime64(3, 'UTC'),
+                source_metadata_version String
+            )
+            ENGINE = MergeTree
+            ORDER BY (dataset_id, timestamp, as_of)
+            """, cancellationToken);
+
+        await ExecuteClickHouseAsync(connection, """
+            CREATE TABLE IF NOT EXISTS forecast_energy_time_series_points (
                 dataset_id String,
                 timestamp DateTime64(3, 'UTC'),
                 value Nullable(Float64),

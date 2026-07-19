@@ -4,17 +4,21 @@ namespace EcoAssetHub.Infrastructure.Repositories;
 
 public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepository
 {
+    private const string ActualTable = "actual_energy_time_series_points";
+    private const string ForecastTable = "forecast_energy_time_series_points";
+
     public async Task<TimeSeriesInsertResult> InsertBatchAsync(TimeSeriesBatchRequest request, CancellationToken cancellationToken = default)
     {
         var insertTime = DateTimeOffset.UtcNow;
         var result = new TimeSeriesInsertResult { AsOf = insertTime };
+        var table = await GetTableAsync(request.DatasetId, cancellationToken);
 
         await using var connection = context.CreateClickHouseConnection();
         await connection.OpenAsync(cancellationToken);
 
         foreach (var point in request.Points.OrderBy(x => x.Timestamp))
         {
-            var latest = await GetLatestAsync(connection, request.DatasetId, point.Timestamp, cancellationToken);
+            var latest = await GetLatestAsync(connection, table, request.DatasetId, point.Timestamp, cancellationToken);
             if (latest == point.Value)
             {
                 result.Skipped++;
@@ -22,8 +26,8 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
             }
 
             await using var command = connection.CreateCommand();
-            command.CommandText = """
-                INSERT INTO energy_time_series_points (
+            command.CommandText = $$"""
+                INSERT INTO {{table}} (
                     dataset_id, timestamp, value, as_of, inserted_at, source_metadata_version)
                 VALUES (
                     {datasetId:String}, {timestamp:DateTime64(3)}, {value:Nullable(Float64)},
@@ -50,6 +54,8 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
         DateTimeOffset? asOf,
         CancellationToken cancellationToken = default)
     {
+        var table = await GetTableAsync(datasetId, cancellationToken);
+
         await using var connection = context.CreateClickHouseConnection();
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
@@ -61,7 +67,7 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
                     value,
                     as_of,
                     row_number() OVER (PARTITION BY dataset_id, timestamp ORDER BY as_of DESC, inserted_at DESC) AS rn
-                FROM energy_time_series_points
+                FROM {{table}}
                 WHERE dataset_id = {datasetId:String}
                   AND timestamp >= {start:DateTime64(3)}
                   AND timestamp <= {end:DateTime64(3)}
@@ -93,12 +99,26 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
         return result;
     }
 
-    private static async Task<double?> GetLatestAsync(System.Data.Common.DbConnection connection, string datasetId, DateTimeOffset timestamp, CancellationToken cancellationToken)
+    private async Task<string> GetTableAsync(string datasetId, CancellationToken cancellationToken)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT data_kind
+            FROM energy_datasets
+            WHERE id = @id
+            LIMIT 1
+            """);
+        command.Parameters.AddWithValue("id", datasetId);
+
+        var dataKind = await command.ExecuteScalarAsync(cancellationToken) as string;
+        return dataKind == "forecast" ? ForecastTable : ActualTable;
+    }
+
+    private static async Task<double?> GetLatestAsync(System.Data.Common.DbConnection connection, string table, string datasetId, DateTimeOffset timestamp, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $$"""
             SELECT value
-            FROM energy_time_series_points
+            FROM {{table}}
             WHERE dataset_id = {datasetId:String} AND timestamp = {timestamp:DateTime64(3)}
             ORDER BY as_of DESC, inserted_at DESC
             LIMIT 1
