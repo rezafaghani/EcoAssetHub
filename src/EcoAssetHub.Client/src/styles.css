@@ -229,6 +229,13 @@ select:hover {
   border-radius: 8px;
 }
 
+.quality-panel {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .metadata-panel {
   min-width: 0;
   background: var(--panel);
@@ -458,11 +465,24 @@ svg text {
   gap: var(--space-3);
 }
 
+.quality-panel {
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-3);
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .section-heading p {
@@ -578,7 +598,8 @@ svg text {
 }
 
 .status-badge.completed,
-.status-badge.enabled {
+.status-badge.enabled,
+.status-badge.healthy {
   background: #dcfae6;
   color: #067647;
 }
@@ -604,9 +625,22 @@ svg text {
 }
 
 .status-badge.failed,
+.status-badge.critical,
 .status-badge.disabled {
   background: #fee4e2;
   color: var(--danger);
+}
+
+.status-badge.degraded,
+.status-badge.warning {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.status-badge.informational,
+.status-badge.unknown {
+  background: #eef2f7;
+  color: #344054;
 }
 
 .metadata-panel {

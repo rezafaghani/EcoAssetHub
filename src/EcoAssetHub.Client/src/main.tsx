@@ -45,6 +45,27 @@ interface ChartTick {
   anchor: 'start' | 'middle' | 'end';
 }
 
+interface QualityFinding {
+  validatorId: string;
+  category: string;
+  severity: string;
+  qualityStatus: string;
+  title: string;
+  message: string;
+  affectedStart: string | null;
+  affectedEnd: string | null;
+  expectedCount: number | null;
+  actualCount: number | null;
+  affectedCount: number | null;
+  sampleTimestamps: string[];
+}
+
+interface ManualQualityEvaluationResult {
+  pointCount: number;
+  overallStatus: string;
+  findings: QualityFinding[];
+}
+
 const chartBounds = {
   left: 72,
   right: 872,
@@ -79,6 +100,8 @@ function App() {
   const [live, setLive] = useState(true);
   const [lastLiveRefresh, setLastLiveRefresh] = useState('');
   const [error, setError] = useState('');
+  const [quality, setQuality] = useState<ManualQualityEvaluationResult | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   useEffect(() => {
@@ -110,6 +133,7 @@ function App() {
       }
       if (selected) {
         void loadSeries(selected, true);
+        void evaluateQuality(selected, true);
       }
       setLastLiveRefresh(new Date().toISOString());
     }, refreshIntervalMs);
@@ -171,10 +195,38 @@ function App() {
       const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/series?${params}`);
       if (!response.ok) throw new Error('Series request failed');
       setSeries(await response.json() as TimeSeriesPoint[]);
+      void evaluateQuality(dataset, true);
     } catch {
       setError('Unable to load series.');
     } finally {
       if (!silent) setLoading(false);
+    }
+  }
+
+  async function evaluateQuality(dataset = selected, silent = false) {
+    if (!dataset) return;
+    if (!silent) setQualityLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/data-quality/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          start: start.trim(),
+          end: end.trim(),
+          asOf: asOf.trim() || null,
+          timeZone,
+          granularity: dataset.granularity,
+          flatLinePointCount: 4
+        })
+      });
+      if (!response.ok) throw new Error('Quality evaluation failed');
+      setQuality(await response.json() as ManualQualityEvaluationResult);
+    } catch {
+      setQuality(null);
+      if (!silent) setError('Unable to evaluate data quality.');
+    } finally {
+      if (!silent) setQualityLoading(false);
     }
   }
 
@@ -307,9 +359,11 @@ function App() {
     setSelectedCurveId(curveId);
     setSelected(nextSelected);
     setSeries([]);
+    setQuality(null);
     void loadIngestionStatus(curveId);
     if (nextSelected) {
       void loadSeries(nextSelected);
+      void evaluateQuality(nextSelected);
     }
   }
 
@@ -381,6 +435,7 @@ function App() {
                   onClick={() => {
                     setSelected(dataset);
                     void loadSeries(dataset);
+                    void evaluateQuality(dataset);
                   }}>
                   <span>{dataset.metric}</span>
                   <small>{dataset.category} · {dataset.dataKind} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
@@ -421,6 +476,14 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} onSetDeprecated={setDatasetDeprecated} />
+
+        <QualityPanel
+          dataset={selected}
+          quality={quality}
+          loading={qualityLoading}
+          timeZone={timeZone}
+          onEvaluate={() => evaluateQuality()}
+        />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -491,6 +554,67 @@ function App() {
         <PointTable points={series} unit={selected?.unit ?? ''} timeZone={timeZone} />
       </section>
     </main>
+  );
+}
+
+function QualityPanel({
+  dataset,
+  quality,
+  loading,
+  timeZone,
+  onEvaluate
+}: {
+  dataset: DatasetMetadata | null;
+  quality: ManualQualityEvaluationResult | null;
+  loading: boolean;
+  timeZone: string;
+  onEvaluate: () => Promise<void>;
+}) {
+  const findings = quality?.findings ?? [];
+  const critical = findings.filter(x => x.severity === 'critical').length;
+  const warnings = findings.filter(x => x.severity === 'warning').length;
+
+  return (
+    <section className="quality-panel">
+      <header className="section-heading">
+        <div>
+          <h2>Data quality</h2>
+          <p>{dataset ? `${dataset.source} · ${dataset.category} · ${dataset.dataKind}` : 'Select a dataset to evaluate quality.'}</p>
+        </div>
+        <div className="section-actions">
+          {quality && <StatusBadge status={quality.overallStatus} />}
+          <button type="button" disabled={!dataset || loading} onClick={() => void onEvaluate()}>{loading ? 'Checking' : 'Check quality'}</button>
+        </div>
+      </header>
+
+      <div className="status-summary">
+        <MetricTile label="Checked points" value={(quality?.pointCount ?? 0).toLocaleString()} />
+        <MetricTile label="Findings" value={findings.length.toLocaleString()} />
+        <MetricTile label="Critical" value={critical.toLocaleString()} />
+        <MetricTile label="Warnings" value={warnings.toLocaleString()} />
+      </div>
+
+      <div className="table-scroll compact">
+        <table>
+          <thead><tr><th>Status</th><th>Finding</th><th>Affected range</th><th>Count</th></tr></thead>
+          <tbody>
+            {findings.slice(0, 12).map(finding => (
+              <tr key={`${finding.validatorId}-${finding.affectedStart ?? ''}-${finding.title}`}>
+                <td><StatusBadge status={finding.severity} /></td>
+                <td>
+                  <strong>{finding.title}</strong>
+                  <small>{finding.message}</small>
+                </td>
+                <td>{formatRange(finding.affectedStart, finding.affectedEnd, timeZone)}</td>
+                <td>{finding.affectedCount?.toLocaleString() ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {dataset && quality && findings.length === 0 && <p className="empty-state">No quality findings for this range.</p>}
+        {dataset && !quality && !loading && <p className="empty-state">Quality has not been checked for this range.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -1038,6 +1162,12 @@ function isSeedPlaceholder(dataset: DatasetMetadata) {
 
 function formatDate(value: string, timeZone: string) {
   return value ? new Intl.DateTimeFormat([], dateTimeFormat(timeZone)).format(new Date(value)) : '';
+}
+
+function formatRange(start: string | null, end: string | null, timeZone: string) {
+  if (!start && !end) return '';
+  if (!end) return formatDate(start ?? '', timeZone);
+  return `${formatDate(start ?? '', timeZone)} - ${formatDate(end, timeZone)}`;
 }
 
 function formatChartTime(value: string, rangeMs: number, timeZone: string) {
