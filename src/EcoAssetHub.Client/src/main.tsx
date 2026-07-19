@@ -10,6 +10,8 @@ interface DatasetMetadata {
   source: string;
   endpoint: string;
   metric: string;
+  dataKind: string;
+  category: string;
   unit: string;
   country: string;
   biddingZone: string;
@@ -67,6 +69,8 @@ function App() {
   const [search, setSearch] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [metric, setMetric] = useState('');
+  const [dataKind, setDataKind] = useState('');
+  const [category, setCategory] = useState('');
   const [start, setStart] = useState(toLocalInput(new Date(Date.now() - 24 * 60 * 60 * 1000)));
   const [end, setEnd] = useState(toLocalInput(new Date()));
   const [asOf, setAsOf] = useState('');
@@ -83,6 +87,8 @@ function App() {
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
   const metrics = useMemo(() => unique(datasets.map(x => x.metric)), [datasets]);
+  const dataKinds = useMemo(() => unique(datasets.map(x => x.dataKind)), [datasets]);
+  const categories = useMemo(() => unique(datasets.map(x => x.category)), [datasets]);
   const curves = useMemo(() => groupDatasetsByCurve(datasets), [datasets]);
   const selectedCurve = curves.find(curve => curve.id === selectedCurveId);
   const selectedCurveDatasets = (selectedCurve?.datasets ?? []) as DatasetMetadata[];
@@ -108,7 +114,7 @@ function App() {
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
-  }, [live, selected, selectedCurveId, start, end, asOf, timeZone, search, endpoint, metric]);
+  }, [live, selected, selectedCurveId, start, end, asOf, timeZone, search, endpoint, metric, dataKind, category]);
 
   async function loadDatasets(silent = false) {
     if (!silent) setLoading(true);
@@ -118,6 +124,8 @@ function App() {
       if (search) params.set('search', search);
       if (endpoint) params.set('endpoint', endpoint);
       if (metric) params.set('metric', metric);
+      if (dataKind) params.set('dataKind', dataKind);
+      if (category) params.set('category', category);
       const response = await fetch(`${apiBase}/datasets?${params}`);
       if (!response.ok) throw new Error('Dataset request failed');
       const result = await response.json() as DatasetMetadata[];
@@ -275,6 +283,20 @@ function App() {
             <select value={metric} onChange={event => setMetric(event.target.value)}>
               <option value="">All metrics</option>
               {metrics.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Kind</span>
+            <select value={dataKind} onChange={event => setDataKind(event.target.value)}>
+              <option value="">All kinds</option>
+              {dataKinds.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Category</span>
+            <select value={category} onChange={event => setCategory(event.target.value)}>
+              <option value="">All categories</option>
+              {categories.map(value => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
           <button onClick={() => void loadDatasets()}>Search</button>
@@ -812,6 +834,8 @@ function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: 
     ['Source', dataset.source],
     ['Endpoint', dataset.endpoint],
     ['Metric', dataset.metric],
+    ['Kind', dataset.dataKind],
+    ['Category', dataset.category],
     ['Unit', dataset.unit],
     ['Country', dataset.country],
     ['Bidding zone', dataset.biddingZone],
