@@ -1,7 +1,5 @@
-﻿using System.Net;
-using EcoAssetHub.API.Application.WindTurbineCommands;
-using EcoAssetHub.API.Application.WindTurbineCommands.CreateCommands;
-using EcoAssetHub.API.Application.WindTurbineCommands.UpdateCommands;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Net;
 using EcoAssetHub.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,7 +16,7 @@ public class WindTurbinesController(IWindTurbineRepository repository) : Control
     [ProducesResponseType((int)HttpStatusCode.BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateWindTurbineCommand command)
     {
-        await repository.CreateAsync((WindTurbine)command);
+        await repository.CreateAsync(new WindTurbine(command.Capacity, command.MeterPointId, command.HubHeight, command.RotorDiameter));
         return Ok();
     }
 
@@ -71,4 +69,46 @@ public class WindTurbinesController(IWindTurbineRepository repository) : Control
         await repository.UpdateAsync(windTurbine);
         return NoContent();
     }
+}
+
+public class WindTurbineDto
+{
+    public required string Id { get; set; }
+    public decimal Capacity { get; set; }
+    public long MeterPointId { get; set; }
+    public decimal HubHeight { get; set; }
+    public decimal RotorDiameter { get; set; }
+}
+
+public class CreateWindTurbineCommand
+{
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal Capacity { get; set; }
+
+    [Range(1, long.MaxValue)]
+    public long MeterPointId { get; set; }
+
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal HubHeight { get; set; }
+
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal RotorDiameter { get; set; }
+}
+
+public class UpdateWindTurbineCommand
+{
+    [Required]
+    public required string Id { get; set; }
+
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal Capacity { get; set; }
+
+    [Range(1, long.MaxValue)]
+    public long MeterPointId { get; set; }
+
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal HubHeight { get; set; }
+
+    [Range(typeof(decimal), "0.0000000001", "79228162514264337593543950335")]
+    public decimal RotorDiameter { get; set; }
 }

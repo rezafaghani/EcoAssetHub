@@ -45,6 +45,64 @@ interface ChartTick {
   anchor: 'start' | 'middle' | 'end';
 }
 
+interface QualityFinding {
+  validatorId: string;
+  category: string;
+  severity: string;
+  qualityStatus: string;
+  title: string;
+  message: string;
+  affectedStart: string | null;
+  affectedEnd: string | null;
+  expectedCount: number | null;
+  actualCount: number | null;
+  affectedCount: number | null;
+  sampleTimestamps: string[];
+}
+
+interface ManualQualityEvaluationResult {
+  metadata: DatasetMetadata;
+  executionId: string | null;
+  pointCount: number;
+  overallStatus: string;
+  findings: QualityFinding[];
+}
+
+interface QualitySummary {
+  healthy: number;
+  degraded: number;
+  critical: number;
+  unknown: number;
+  activeFindings: number;
+  activeCriticalFindings: number;
+}
+
+interface QualityValidatorType {
+  id: string;
+  category: string;
+  displayName: string;
+  description: string;
+  defaultSeverity: string;
+}
+
+interface QualityGroup {
+  id: string;
+  name: string;
+  groupType: string;
+  enabled: boolean;
+}
+
+interface QualityJob {
+  id: string;
+  name: string;
+  enabled: boolean;
+  cronExpression: string;
+  windowStartExpression: string;
+  windowEndExpression: string;
+  targets: { targetType: string; targetId: string }[];
+  checks: { validatorId: string; enabled: boolean }[];
+}
+
 const chartBounds = {
   left: 72,
   right: 872,
@@ -79,10 +137,17 @@ function App() {
   const [live, setLive] = useState(true);
   const [lastLiveRefresh, setLastLiveRefresh] = useState('');
   const [error, setError] = useState('');
+  const [quality, setQuality] = useState<ManualQualityEvaluationResult | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [qualitySummary, setQualitySummary] = useState<QualitySummary | null>(null);
+  const [qualityValidators, setQualityValidators] = useState<QualityValidatorType[]>([]);
+  const [qualityGroups, setQualityGroups] = useState<QualityGroup[]>([]);
+  const [qualityJobs, setQualityJobs] = useState<QualityJob[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   useEffect(() => {
     void loadDatasets();
+    void loadQualityAdmin();
   }, []);
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
@@ -110,8 +175,10 @@ function App() {
       }
       if (selected) {
         void loadSeries(selected, true);
+        void evaluateQuality(selected, true);
       }
       setLastLiveRefresh(new Date().toISOString());
+      void loadQualityAdmin(true);
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
@@ -171,11 +238,145 @@ function App() {
       const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/series?${params}`);
       if (!response.ok) throw new Error('Series request failed');
       setSeries(await response.json() as TimeSeriesPoint[]);
+      void evaluateQuality(dataset, true);
     } catch {
       setError('Unable to load series.');
     } finally {
       if (!silent) setLoading(false);
     }
+  }
+
+  async function evaluateQuality(dataset = selected, silent = false) {
+    if (!dataset) return;
+    if (!silent) setQualityLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/data-quality/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          start: start.trim(),
+          end: end.trim(),
+          asOf: asOf.trim() || null,
+          timeZone,
+          granularity: dataset.granularity,
+          flatLinePointCount: 4
+        })
+      });
+      if (!response.ok) throw new Error('Quality evaluation failed');
+      setQuality(await response.json() as ManualQualityEvaluationResult);
+      void loadQualityAdmin(true);
+    } catch {
+      setQuality(null);
+      if (!silent) setError('Unable to evaluate data quality.');
+    } finally {
+      if (!silent) setQualityLoading(false);
+    }
+  }
+
+  async function loadQualityAdmin(silent = false) {
+    if (!silent) setError('');
+    try {
+      const [summaryResponse, validatorsResponse, groupsResponse, jobsResponse] = await Promise.all([
+        fetch(`${apiBase}/data-quality/summary`),
+        fetch(`${apiBase}/data-quality/validation-types`),
+        fetch(`${apiBase}/data-quality/groups`),
+        fetch(`${apiBase}/data-quality/jobs`)
+      ]);
+      if (!summaryResponse.ok || !validatorsResponse.ok || !groupsResponse.ok || !jobsResponse.ok) {
+        throw new Error('Quality admin request failed');
+      }
+
+      setQualitySummary(await summaryResponse.json() as QualitySummary);
+      setQualityValidators(await validatorsResponse.json() as QualityValidatorType[]);
+      setQualityGroups(await groupsResponse.json() as QualityGroup[]);
+      setQualityJobs(await jobsResponse.json() as QualityJob[]);
+    } catch {
+      if (!silent) setError('Unable to load data quality configuration.');
+    }
+  }
+
+  async function createQualityGroupForSelected() {
+    if (!selected) return;
+    setError('');
+    const groupResponse = await fetch(`${apiBase}/data-quality/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${selected.source} ${selected.category} ${selected.dataKind}`,
+        description: `Static quality group for ${selected.curveId || selected.id}`,
+        groupType: 'static',
+        enabled: true,
+        rule: {},
+        tags: {}
+      })
+    });
+    if (!groupResponse.ok) {
+      setError(await groupResponse.text() || 'Unable to create quality group.');
+      return;
+    }
+
+    const group = await groupResponse.json() as QualityGroup;
+    const memberResponse = await fetch(`${apiBase}/data-quality/groups/${encodeURIComponent(group.id)}/members`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ members: [{ datasetId: selected.id, curveId: getDatasetCurveId(selected) }] })
+    });
+    if (!memberResponse.ok) {
+      setError(await memberResponse.text() || 'Unable to set quality group members.');
+      return;
+    }
+
+    await loadQualityAdmin(true);
+  }
+
+  async function createQualityJobForSelected(validatorId: string) {
+    if (!selected) return;
+    setError('');
+    const response = await fetch(`${apiBase}/data-quality/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${selected.source} ${selected.category} ${validatorId}`,
+        description: `Quality validation for ${selected.id}`,
+        enabled: true,
+        cronExpression: suggestCronFromGranularity(selected.granularity) || '*/30 * * * *',
+        timeZone,
+        windowStartExpression: 'now-24h',
+        windowEndExpression: 'now',
+        maxParallelism: 4,
+        timeoutSeconds: 300,
+        tags: {},
+        targets: [{ targetType: 'dataset', targetId: selected.id, rule: {} }],
+        checks: [{ validatorId, enabled: true, configuration: {}, severity: {} }]
+      })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to create quality job.');
+      return;
+    }
+
+    await loadQualityAdmin(true);
+  }
+
+  async function runQualityJob(jobId: string) {
+    setError('');
+    const response = await fetch(`${apiBase}/data-quality/jobs/${encodeURIComponent(jobId)}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to run quality job.');
+      return;
+    }
+
+    const result = await response.json() as { results: ManualQualityEvaluationResult[] };
+    const selectedResult = selected ? result.results.find(item => item.metadata?.id === selected.id) : null;
+    if (selectedResult) {
+      setQuality(selectedResult);
+    }
+    await loadQualityAdmin(true);
   }
 
   async function loadIngestionStatus(curveId = selectedCurveId, silent = false) {
@@ -307,9 +508,11 @@ function App() {
     setSelectedCurveId(curveId);
     setSelected(nextSelected);
     setSeries([]);
+    setQuality(null);
     void loadIngestionStatus(curveId);
     if (nextSelected) {
       void loadSeries(nextSelected);
+      void evaluateQuality(nextSelected);
     }
   }
 
@@ -381,6 +584,7 @@ function App() {
                   onClick={() => {
                     setSelected(dataset);
                     void loadSeries(dataset);
+                    void evaluateQuality(dataset);
                   }}>
                   <span>{dataset.metric}</span>
                   <small>{dataset.category} · {dataset.dataKind} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
@@ -421,6 +625,25 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} onSetDeprecated={setDatasetDeprecated} />
+
+        <QualityPanel
+          dataset={selected}
+          quality={quality}
+          loading={qualityLoading}
+          timeZone={timeZone}
+          onEvaluate={() => evaluateQuality()}
+        />
+
+        <QualityAdminPanel
+          selected={selected}
+          summary={qualitySummary}
+          validators={qualityValidators}
+          groups={qualityGroups}
+          jobs={qualityJobs}
+          onCreateGroup={createQualityGroupForSelected}
+          onCreateJob={createQualityJobForSelected}
+          onRunJob={runQualityJob}
+        />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -491,6 +714,149 @@ function App() {
         <PointTable points={series} unit={selected?.unit ?? ''} timeZone={timeZone} />
       </section>
     </main>
+  );
+}
+
+function QualityPanel({
+  dataset,
+  quality,
+  loading,
+  timeZone,
+  onEvaluate
+}: {
+  dataset: DatasetMetadata | null;
+  quality: ManualQualityEvaluationResult | null;
+  loading: boolean;
+  timeZone: string;
+  onEvaluate: () => Promise<void>;
+}) {
+  const findings = quality?.findings ?? [];
+  const critical = findings.filter(x => x.severity === 'critical').length;
+  const warnings = findings.filter(x => x.severity === 'warning').length;
+
+  return (
+    <section className="quality-panel">
+      <header className="section-heading">
+        <div>
+          <h2>Data quality</h2>
+          <p>{dataset ? `${dataset.source} · ${dataset.category} · ${dataset.dataKind}` : 'Select a dataset to evaluate quality.'}</p>
+        </div>
+        <div className="section-actions">
+          {quality && <StatusBadge status={quality.overallStatus} />}
+          <button type="button" disabled={!dataset || loading} onClick={() => void onEvaluate()}>{loading ? 'Checking' : 'Check quality'}</button>
+        </div>
+      </header>
+
+      <div className="status-summary">
+        <MetricTile label="Checked points" value={(quality?.pointCount ?? 0).toLocaleString()} />
+        <MetricTile label="Findings" value={findings.length.toLocaleString()} />
+        <MetricTile label="Critical" value={critical.toLocaleString()} />
+        <MetricTile label="Warnings" value={warnings.toLocaleString()} />
+      </div>
+
+      <div className="table-scroll compact">
+        <table>
+          <thead><tr><th>Status</th><th>Finding</th><th>Affected range</th><th>Count</th></tr></thead>
+          <tbody>
+            {findings.slice(0, 12).map(finding => (
+              <tr key={`${finding.validatorId}-${finding.affectedStart ?? ''}-${finding.title}`}>
+                <td><StatusBadge status={finding.severity} /></td>
+                <td>
+                  <strong>{finding.title}</strong>
+                  <small>{finding.message}</small>
+                </td>
+                <td>{formatRange(finding.affectedStart, finding.affectedEnd, timeZone)}</td>
+                <td>{finding.affectedCount?.toLocaleString() ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {dataset && quality && findings.length === 0 && <p className="empty-state">No quality findings for this range.</p>}
+        {dataset && !quality && !loading && <p className="empty-state">Quality has not been checked for this range.</p>}
+      </div>
+    </section>
+  );
+}
+
+function QualityAdminPanel({
+  selected,
+  summary,
+  validators,
+  groups,
+  jobs,
+  onCreateGroup,
+  onCreateJob,
+  onRunJob
+}: {
+  selected: DatasetMetadata | null;
+  summary: QualitySummary | null;
+  validators: QualityValidatorType[];
+  groups: QualityGroup[];
+  jobs: QualityJob[];
+  onCreateGroup: () => Promise<void>;
+  onCreateJob: (validatorId: string) => Promise<void>;
+  onRunJob: (jobId: string) => Promise<void>;
+}) {
+  const [validatorId, setValidatorId] = useState('completeness.missing-timestamps');
+  const selectedJobs = selected
+    ? jobs.filter(job => job.targets.some(target => target.targetId === selected.id))
+    : [];
+
+  useEffect(() => {
+    if (validators.length && !validators.some(validator => validator.id === validatorId)) {
+      setValidatorId(validators[0].id);
+    }
+  }, [validators, validatorId]);
+
+  return (
+    <section className="quality-panel">
+      <header className="section-heading">
+        <div>
+          <h2>Quality workspace</h2>
+          <p>{groups.length} groups · {jobs.length} jobs · {validators.length} validation types</p>
+        </div>
+        <StatusBadge status={summary?.activeCriticalFindings ? 'critical' : summary?.activeFindings ? 'degraded' : 'healthy'} />
+      </header>
+
+      <div className="status-summary">
+        <MetricTile label="Healthy" value={(summary?.healthy ?? 0).toLocaleString()} />
+        <MetricTile label="Degraded" value={(summary?.degraded ?? 0).toLocaleString()} />
+        <MetricTile label="Critical" value={(summary?.critical ?? 0).toLocaleString()} />
+        <MetricTile label="Active findings" value={(summary?.activeFindings ?? 0).toLocaleString()} />
+      </div>
+
+      <div className="quality-config-row">
+        <label>
+          <span>Validation check</span>
+          <select value={validatorId} onChange={event => setValidatorId(event.target.value)}>
+            {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.displayName}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!selected} onClick={() => void onCreateJob(validatorId)}>Add job</button>
+        <button type="button" className="secondary" disabled={!selected} onClick={() => void onCreateGroup()}>Add group</button>
+      </div>
+
+      <div className="table-scroll compact">
+        <table>
+          <thead><tr><th>Job</th><th>Checks</th><th>Schedule</th><th></th></tr></thead>
+          <tbody>
+            {selectedJobs.slice(0, 8).map(job => (
+              <tr key={job.id}>
+                <td>
+                  <strong>{job.name}</strong>
+                  <small>{job.id}</small>
+                </td>
+                <td>{job.checks.filter(check => check.enabled).map(check => check.validatorId).join(', ')}</td>
+                <td>{job.windowStartExpression} - {job.windowEndExpression}</td>
+                <td><button type="button" className="table-action" onClick={() => void onRunJob(job.id)}>Run</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {selected && selectedJobs.length === 0 && <p className="empty-state">No quality jobs target this dataset yet.</p>}
+        {!selected && <p className="empty-state">Select a dataset to configure quality jobs.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -1038,6 +1404,12 @@ function isSeedPlaceholder(dataset: DatasetMetadata) {
 
 function formatDate(value: string, timeZone: string) {
   return value ? new Intl.DateTimeFormat([], dateTimeFormat(timeZone)).format(new Date(value)) : '';
+}
+
+function formatRange(start: string | null, end: string | null, timeZone: string) {
+  if (!start && !end) return '';
+  if (!end) return formatDate(start ?? '', timeZone);
+  return `${formatDate(start ?? '', timeZone)} - ${formatDate(end, timeZone)}`;
 }
 
 function formatChartTime(value: string, rangeMs: number, timeZone: string) {

@@ -1,14 +1,17 @@
 using Cronos;
 using EcoAssetHub.Domain.Entities;
 using EcoAssetHub.Domain.Interfaces;
+using EcoAssetHub.Domain.Models;
 using EcoAssetHub.Infrastructure.Services;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
 
 namespace EcoAssetHub.Scheduler;
 
 public class Worker(
     IServiceScopeFactory scopeFactory,
     RabbitMqJobPublisher publisher,
+    IHttpClientFactory httpClientFactory,
     IOptions<SchedulerOptions> options,
     ILogger<Worker> logger) : BackgroundService
 {
@@ -53,12 +56,63 @@ public class Worker(
                 logger.LogError(ex, "Failed to queue schedule {ScheduleId}.", schedule.Id);
             }
         }
+
+        await QueueDueQualityJobsAsync(scope.ServiceProvider, now, cancellationToken);
     }
 
     private static bool IsDue(IngestionSchedule schedule, DateTimeOffset now)
     {
         var from = schedule.LastQueuedAt ?? schedule.CreatedAt.AddMinutes(-1);
         var expression = CronExpression.Parse(schedule.CronExpression);
+        var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
+        return next.HasValue && next.Value <= now;
+    }
+
+    private async Task QueueDueQualityJobsAsync(IServiceProvider services, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(options.Value.QualityApiBaseUrl))
+        {
+            return;
+        }
+
+        var repository = services.GetRequiredService<IQualityRepository>();
+        var client = httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(options.Value.QualityApiBaseUrl.TrimEnd('/') + "/");
+
+        foreach (var job in await repository.GetEnabledJobsAsync(cancellationToken))
+        {
+            try
+            {
+                if (!IsDue(job, now))
+                {
+                    continue;
+                }
+
+                var response = await client.PostAsJsonAsync(
+                    $"api/data-quality/jobs/{Uri.EscapeDataString(job.Id)}/runs",
+                    new RunQualityJobRequest(null, null, "scheduled"),
+                    cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("Quality job {JobId} returned {StatusCode}.", job.Id, response.StatusCode);
+                    continue;
+                }
+
+                await repository.MarkJobQueuedAsync(job.Id, now, cancellationToken);
+                logger.LogInformation("Queued quality job {JobId}.", job.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to queue quality job {JobId}.", job.Id);
+            }
+        }
+    }
+
+    private static bool IsDue(QualityValidationJobDto job, DateTimeOffset now)
+    {
+        var from = job.LastQueuedAt ?? job.CreatedAt.AddMinutes(-1);
+        var expression = CronExpression.Parse(job.CronExpression);
         var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
         return next.HasValue && next.Value <= now;
     }
