@@ -153,3 +153,32 @@ public record QualitySummaryDto(
     int Unknown,
     int ActiveFindings,
     int ActiveCriticalFindings);
+
+public record QualityEvaluationRequest(
+    DatasetMetadataDto Metadata,
+    DateTimeOffset Start,
+    DateTimeOffset End,
+    DateTimeOffset Now,
+    TimeSpan Granularity,
+    TimeSpan? AllowedDelay,
+    double? MinimumValue,
+    double? MaximumValue,
+    double? MaximumAbsoluteChange,
+    double? MaximumPercentageChange,
+    double NearZeroFloor,
+    int FlatLinePointCount,
+    List<TimeSeriesPointDto> Points);
+
+public record QualityFindingDraftDto(
+    string ValidatorId,
+    string Category,
+    string Severity,
+    string QualityStatus,
+    string Title,
+    string Message,
+    DateTimeOffset? AffectedStart,
+    DateTimeOffset? AffectedEnd,
+    int? ExpectedCount,
+    int? ActualCount,
+    int? AffectedCount,
+    List<DateTimeOffset> SampleTimestamps);
