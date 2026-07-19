@@ -1,22 +1,19 @@
-using EcoAssetHub.API.Infrastructure.Services;
 using EcoAssetHub.Domain.Models;
 using EcoAssetHub.Domain.Services;
 using Microsoft.AspNetCore.Mvc;
-using System.Xml;
 
 namespace EcoAssetHub.API.Controllers;
 
 [ApiController]
 [Route("api/data-quality")]
 public class DataQualityController(
-    QualityValidatorCatalog validatorCatalog,
     IQualityRepository qualityRepository,
-    IDatasetRepository datasetRepository,
-    ITimeSeriesRepository timeSeriesRepository) : ControllerBase
+    IValidationJobPublisher publisher) : ControllerBase
 {
     [HttpGet("validation-types")]
     [ProducesResponseType(typeof(List<QualityValidatorTypeDto>), StatusCodes.Status200OK)]
-    public IActionResult ValidationTypes() => Ok(validatorCatalog.List());
+    public async Task<IActionResult> ValidationTypes(CancellationToken cancellationToken) =>
+        Ok(await qualityRepository.GetValidatorTypesAsync(ValidationPluginUsage.Api, cancellationToken));
 
     [HttpGet("groups")]
     [ProducesResponseType(typeof(List<QualityCurveGroupDto>), StatusCodes.Status200OK)]
@@ -92,7 +89,9 @@ public class DataQualityController(
             return BadRequest("A quality job requires a name, schedule, evaluation window, target, and validation check.");
         }
 
-        var validatorIds = validatorCatalog.List().Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var validatorIds = (await qualityRepository.GetValidatorTypesAsync(ValidationPluginUsage.Api, cancellationToken))
+            .Select(x => x.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (request.Checks.Any(x => !validatorIds.Contains(x.ValidatorId)))
         {
             return BadRequest("One or more validation checks are not supported.");
@@ -111,7 +110,7 @@ public class DataQualityController(
     }
 
     [HttpPost("jobs/{id}/runs")]
-    [ProducesResponseType(typeof(RunQualityJobResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RunJob([FromRoute] string id, [FromBody] RunQualityJobRequest request, CancellationToken cancellationToken)
@@ -135,32 +134,16 @@ public class DataQualityController(
             return BadRequest("The quality job has no enabled validation checks.");
         }
 
-        try
+        var message = new ValidationJobMessage
         {
-            var datasetIds = await ResolveTargetDatasetIds(job, cancellationToken);
-            var results = new List<ManualQualityEvaluationResult>();
-            foreach (var datasetId in datasetIds)
-            {
-                var result = await EvaluateDataset(datasetId, start, end, null, job.TimeZone, validatorIds, cancellationToken);
-                if (result is not null)
-                {
-                    results.Add(result);
-                }
-            }
-
-            return Ok(new RunQualityJobResult(
-                job.Id,
-                string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType,
-                datasetIds.Count,
-                results.Count,
-                results.Sum(x => x.Findings.Count),
-                results.Sum(x => x.Findings.Count(finding => finding.Severity == "critical")),
-                results));
-        }
-        catch (ArgumentException exception)
-        {
-            return BadRequest(exception.Message);
-        }
+            JobId = job.Id,
+            ExecutionId = $"quality-execution-{Guid.NewGuid():N}",
+            TriggerType = string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType,
+            WindowStartExpression = request.Start ?? job.WindowStartExpression,
+            WindowEndExpression = request.End ?? job.WindowEndExpression
+        };
+        await publisher.PublishValidationAsync(message, cancellationToken);
+        return Accepted(new { message.JobId, message.ExecutionId, message.TriggerType, Start = start, End = end });
     }
 
     [HttpGet("findings")]
@@ -199,142 +182,7 @@ public class DataQualityController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Evaluate([FromBody] ManualQualityEvaluationRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.DatasetId)
-            || !DateTimeExpression.TryResolve(request.Start, out var start, request.TimeZone)
-            || !DateTimeExpression.TryResolve(request.End, out var end, request.TimeZone)
-            || start >= end)
-        {
-            return BadRequest("A valid dataset id and half-open date range are required.");
-        }
-
-        DateTimeOffset? asOf = null;
-        if (!string.IsNullOrWhiteSpace(request.AsOf))
-        {
-            if (!DateTimeExpression.TryResolve(request.AsOf, out var parsedAsOf, request.TimeZone))
-            {
-                return BadRequest("A valid asOf version time is required.");
-            }
-
-            asOf = parsedAsOf;
-        }
-
-        try
-        {
-            var result = await EvaluateDataset(request.DatasetId, start, end, asOf, request.TimeZone, null, cancellationToken, request);
-            return result is null ? NotFound() : Ok(result);
-        }
-        catch (ArgumentException exception)
-        {
-            return BadRequest(exception.Message);
-        }
-    }
-
-    private async Task<ManualQualityEvaluationResult?> EvaluateDataset(
-        string datasetId,
-        DateTimeOffset start,
-        DateTimeOffset end,
-        DateTimeOffset? asOf,
-        string? timeZone,
-        HashSet<string>? validatorIds,
-        CancellationToken cancellationToken,
-        ManualQualityEvaluationRequest? request = null)
-    {
-        var metadata = await datasetRepository.GetAsync(datasetId, cancellationToken);
-        if (metadata is null)
-        {
-            return null;
-        }
-
-        if (!TryParseDuration(request?.Granularity ?? metadata.Granularity, out var granularity)
-            || !TryParseOptionalDuration(request?.AllowedDelay, out var allowedDelay))
-        {
-            throw new ArgumentException("Granularity and allowedDelay must be ISO-8601 durations, for example PT15M.");
-        }
-
-        var points = await timeSeriesRepository.GetSeriesAsync(datasetId, start, end, asOf, cancellationToken, 10000);
-        var findings = QualityValidationEngine.Evaluate(new QualityEvaluationRequest(
-            metadata,
-            start,
-            end,
-            DateTimeOffset.UtcNow,
-            granularity,
-            allowedDelay,
-            request?.MinimumValue,
-            request?.MaximumValue,
-            request?.MaximumAbsoluteChange,
-            request?.MaximumPercentageChange,
-            request?.NearZeroFloor ?? 0.000001,
-            request?.FlatLinePointCount ?? 0,
-            points));
-
-        if (validatorIds is not null)
-        {
-            findings = findings.Where(x => validatorIds.Contains(x.ValidatorId)).ToList();
-        }
-
-        var result = new ManualQualityEvaluationResult(metadata, start, end, points.Count, OverallStatus(findings), findings);
-        var executionId = await qualityRepository.SaveManualEvaluationAsync(result, cancellationToken);
-        return result with { ExecutionId = executionId };
-    }
-
-    private async Task<List<string>> ResolveTargetDatasetIds(QualityValidationJobDto job, CancellationToken cancellationToken)
-    {
-        var ids = new List<string>();
-        foreach (var target in job.Targets)
-        {
-            if (target.TargetType == "dataset")
-            {
-                ids.Add(target.TargetId);
-            }
-            else if (target.TargetType == "group")
-            {
-                var members = await qualityRepository.GetCurveGroupMembersAsync(target.TargetId, cancellationToken);
-                ids.AddRange(members.Select(x => x.DatasetId));
-            }
-        }
-
-        return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    }
-
-    private static string OverallStatus(List<QualityFindingDraftDto> findings)
-    {
-        if (findings.Any(x => x.QualityStatus == QualityStatuses.Critical))
-        {
-            return QualityStatuses.Critical;
-        }
-
-        return findings.Count == 0 ? QualityStatuses.Healthy : QualityStatuses.Degraded;
-    }
-
-    private static bool TryParseOptionalDuration(string? value, out TimeSpan? duration)
-    {
-        duration = null;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        if (!TryParseDuration(value, out var parsed))
-        {
-            return false;
-        }
-
-        duration = parsed;
-        return true;
-    }
-
-    private static bool TryParseDuration(string value, out TimeSpan duration)
-    {
-        try
-        {
-            duration = XmlConvert.ToTimeSpan(value);
-            return duration > TimeSpan.Zero;
-        }
-        catch (FormatException)
-        {
-            duration = default;
-            return false;
-        }
+        return BadRequest("Validation checks run in the validation worker. Create or run a validation job instead.");
     }
 }
 

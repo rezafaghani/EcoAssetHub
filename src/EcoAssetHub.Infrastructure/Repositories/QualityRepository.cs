@@ -9,6 +9,72 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public async Task<List<QualityValidatorTypeDto>> GetValidatorTypesAsync(ValidationPluginUsage usage, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT id, category, display_name, description, target_type, configuration_version, default_severity, configuration_schema::text
+            FROM quality_validation_plugins
+            WHERE (usage & @usage) = @usage
+            ORDER BY category, id
+            """);
+        command.Parameters.AddWithValue("usage", (int)usage);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<QualityValidatorTypeDto>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new QualityValidatorTypeDto(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetInt32(5),
+                reader.GetString(6),
+                Json(reader.GetString(7))));
+        }
+
+        return result;
+    }
+
+    public async Task UpsertValidatorTypesAsync(IEnumerable<RegisteredValidationPluginDto> validators, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var validator in validators)
+        {
+            await using var command = context.Postgres.CreateCommand("""
+                INSERT INTO quality_validation_plugins (
+                    id, category, display_name, description, target_type, configuration_version,
+                    default_severity, configuration_schema, usage, registered_at, updated_at)
+                VALUES (
+                    @id, @category, @display_name, @description, @target_type, @configuration_version,
+                    @default_severity, @configuration_schema, @usage, @registered_at, @updated_at)
+                ON CONFLICT (id) DO UPDATE SET
+                    category = EXCLUDED.category,
+                    display_name = EXCLUDED.display_name,
+                    description = EXCLUDED.description,
+                    target_type = EXCLUDED.target_type,
+                    configuration_version = EXCLUDED.configuration_version,
+                    default_severity = EXCLUDED.default_severity,
+                    configuration_schema = EXCLUDED.configuration_schema,
+                    usage = EXCLUDED.usage,
+                    updated_at = EXCLUDED.updated_at
+                """);
+            command.Parameters.AddWithValue("id", validator.Id);
+            command.Parameters.AddWithValue("category", validator.Category);
+            command.Parameters.AddWithValue("display_name", validator.DisplayName);
+            command.Parameters.AddWithValue("description", validator.Description);
+            command.Parameters.AddWithValue("target_type", validator.TargetType);
+            command.Parameters.AddWithValue("configuration_version", validator.ConfigurationVersion);
+            command.Parameters.AddWithValue("default_severity", validator.DefaultSeverity);
+            AddJson(command, "configuration_schema", validator.ConfigurationSchema);
+            command.Parameters.AddWithValue("usage", (int)validator.Usage);
+            command.Parameters.AddWithValue("registered_at", validator.RegisteredAt == default ? now : validator.RegisteredAt);
+            command.Parameters.AddWithValue("updated_at", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     public async Task<List<QualityCurveGroupDto>> GetCurveGroupsAsync(CancellationToken cancellationToken = default)
     {
         await using var command = context.Postgres.CreateCommand("""
@@ -304,7 +370,21 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
 
     public async Task<string> SaveManualEvaluationAsync(ManualQualityEvaluationResult result, CancellationToken cancellationToken = default)
     {
-        var executionId = $"quality-execution-{Guid.NewGuid():N}";
+        return await SaveEvaluationAsync($"quality-execution-{Guid.NewGuid():N}", "manual", "manual", result, cancellationToken);
+    }
+
+    public async Task<string> SaveJobEvaluationAsync(string executionId, string jobId, string triggerType, ManualQualityEvaluationResult result, CancellationToken cancellationToken = default)
+    {
+        return await SaveEvaluationAsync(
+            string.IsNullOrWhiteSpace(executionId) ? $"quality-execution-{Guid.NewGuid():N}" : executionId,
+            jobId,
+            string.IsNullOrWhiteSpace(triggerType) ? "scheduled" : triggerType,
+            result,
+            cancellationToken);
+    }
+
+    private async Task<string> SaveEvaluationAsync(string executionId, string jobId, string triggerType, ManualQualityEvaluationResult result, CancellationToken cancellationToken)
+    {
         var targetExecutionId = $"quality-target-{Guid.NewGuid():N}";
         var now = DateTimeOffset.UtcNow;
         await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
@@ -319,12 +399,13 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
                     evaluated_start, evaluated_end, config_snapshot, target_snapshot, target_count,
                     completed_count, warning_count, critical_count, technical_failure_count, error)
                 VALUES (
-                    @id, @job_id, 'manual', @status, @now, @now, @now,
+                    @id, @job_id, @trigger_type, @status, @now, @now, @now,
                     @evaluated_start, @evaluated_end, @config_snapshot, @target_snapshot, 1,
                     1, @warning_count, @critical_count, 0, '')
-                """;
+            """;
             command.Parameters.AddWithValue("id", executionId);
-            command.Parameters.AddWithValue("job_id", "manual");
+            command.Parameters.AddWithValue("job_id", jobId);
+            command.Parameters.AddWithValue("trigger_type", triggerType);
             command.Parameters.AddWithValue("status", result.Findings.Count == 0 ? QualityExecutionStatuses.Completed : QualityExecutionStatuses.CompletedWithFindings);
             command.Parameters.AddWithValue("now", now);
             command.Parameters.AddWithValue("evaluated_start", result.Start);

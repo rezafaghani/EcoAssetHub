@@ -1,5 +1,5 @@
 using EcoAssetHub.Domain.Models;
-using EcoAssetHub.Domain.Services;
+using EcoAssetHub.Validation;
 
 namespace EcoAssetHub.UnitTest.Services;
 

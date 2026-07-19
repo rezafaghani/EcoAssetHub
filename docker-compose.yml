@@ -40,6 +40,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-ecoassethub}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -58,9 +59,12 @@ services:
       ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RabbitMq__ExchangeName: ecoassethub.jobs
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
+      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
     ports:
       - "5100:8080"
     restart: unless-stopped
@@ -97,14 +101,42 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RabbitMq__ExchangeName: ecoassethub.jobs
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
+      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
       Scheduler__PollingSeconds: 10
       Scheduler__ExecutionApiBaseUrl: http://api:8080
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  validation-worker:
+    build:
+      context: .
+      dockerfile: src/EcoAssetHub.Validation.Worker/Dockerfile
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+      RabbitMq__HostName: rabbitmq
+      RabbitMq__Port: 5672
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
+      RabbitMq__UserName: ${RABBITMQ_USER:-guest}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RabbitMq__ExchangeName: ecoassethub.jobs
+      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
+    ports:
+      - "5104:8080"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -122,8 +154,10 @@ services:
       InsertApi__Scope: ${INSERT_API_SCOPE:-ecoassethub.insert.write}
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RabbitMq__ExchangeName: ecoassethub.jobs
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
       Ingestion__LookbackHours: 48
       Ingestion__BatchSize: 500

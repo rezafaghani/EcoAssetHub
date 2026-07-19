@@ -41,12 +41,21 @@ public class Worker(
         {
             HostName = rabbitOptions.HostName,
             Port = rabbitOptions.Port,
+            VirtualHost = rabbitOptions.VirtualHost,
             UserName = rabbitOptions.UserName,
             Password = rabbitOptions.Password
         };
         await using var connection = await factory.CreateConnectionAsync(stoppingToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
-        await channel.QueueDeclareAsync(rabbitOptions.QueueName, durable: true, exclusive: false, autoDelete: false, cancellationToken: stoppingToken);
+        await channel.ExchangeDeclareAsync(rabbitOptions.ExchangeName, ExchangeType.Direct, durable: true, autoDelete: false, cancellationToken: stoppingToken);
+        await channel.QueueDeclareAsync(
+            rabbitOptions.QueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object?> { ["x-queue-type"] = "quorum" },
+            cancellationToken: stoppingToken);
+        await channel.QueueBindAsync(rabbitOptions.QueueName, rabbitOptions.ExchangeName, rabbitOptions.QueueName, cancellationToken: stoppingToken);
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 1, global: false, cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
