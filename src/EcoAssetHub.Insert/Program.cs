@@ -19,8 +19,9 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
+    var postgres = configuration.GetConnectionString("Postgres") ?? throw new InvalidOperationException("Postgres connection string is not configured.");
     var clickHouse = configuration.GetConnectionString("ClickHouse") ?? throw new InvalidOperationException("ClickHouse connection string is not configured.");
-    return new EcoAssetHubContext(null, clickHouse);
+    return new EcoAssetHubContext(postgres, clickHouse);
 });
 builder.Services.AddScoped<ITimeSeriesRepository, TimeSeriesRepository>();
 

@@ -77,12 +77,15 @@ services:
       context: .
       dockerfile: src/EcoAssetHub.Insert/Dockerfile
     environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
     ports:
       - "5101:8080"
       - "5103:8081"
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       clickhouse:
         condition: service_healthy
 
