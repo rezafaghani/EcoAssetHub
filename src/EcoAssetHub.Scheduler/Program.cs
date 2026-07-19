@@ -17,6 +17,7 @@ builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
 });
 builder.Services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
 builder.Services.AddScoped<IDatasetRepository, DatasetRepository>();
+builder.Services.AddScoped<IExecutionRepository, ExecutionRepository>();
 builder.Services.AddScoped<IQualityRepository, QualityRepository>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<RabbitMqJobPublisher>();

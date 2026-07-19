@@ -134,6 +134,86 @@ public sealed class EcoAssetHubContext
             CREATE INDEX IF NOT EXISTS ix_energy_datasets_filters
                 ON energy_datasets(endpoint, curve_id, metric, data_kind, category, country, bidding_zone, region, granularity);
 
+            CREATE TABLE IF NOT EXISTS execution_definitions (
+                id text PRIMARY KEY,
+                name text NOT NULL,
+                description text NOT NULL,
+                enabled boolean NOT NULL,
+                cron_expression text NOT NULL,
+                time_zone text NOT NULL,
+                window_start_expression text NOT NULL,
+                window_end_expression text NOT NULL,
+                max_parallelism integer NOT NULL,
+                timeout_seconds integer NOT NULL,
+                tags jsonb NOT NULL,
+                last_queued_at timestamptz NULL,
+                created_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_execution_definitions_enabled
+                ON execution_definitions(enabled, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS execution_definition_targets (
+                definition_id text NOT NULL REFERENCES execution_definitions(id) ON DELETE CASCADE,
+                target_type text NOT NULL,
+                target_id text NOT NULL,
+                rule jsonb NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_execution_definition_targets_definition
+                ON execution_definition_targets(definition_id);
+
+            CREATE TABLE IF NOT EXISTS execution_definition_plugins (
+                id text PRIMARY KEY,
+                definition_id text NOT NULL REFERENCES execution_definitions(id) ON DELETE CASCADE,
+                plugin_id text NOT NULL,
+                plugin_version integer NOT NULL,
+                enabled boolean NOT NULL,
+                configuration jsonb NOT NULL,
+                severity jsonb NOT NULL,
+                sort_order integer NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_execution_definition_plugins_definition
+                ON execution_definition_plugins(definition_id, enabled, sort_order);
+
+            CREATE TABLE IF NOT EXISTS execution_runs (
+                id text PRIMARY KEY,
+                definition_id text NOT NULL,
+                trigger_type text NOT NULL,
+                status text NOT NULL,
+                queued_at timestamptz NOT NULL,
+                started_at timestamptz NULL,
+                finished_at timestamptz NULL,
+                evaluated_start timestamptz NULL,
+                evaluated_end timestamptz NULL,
+                target_count integer NOT NULL,
+                completed_count integer NOT NULL,
+                finding_count integer NOT NULL,
+                critical_count integer NOT NULL,
+                error text NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_execution_runs_definition_queued
+                ON execution_runs(definition_id, queued_at DESC);
+
+            CREATE TABLE IF NOT EXISTS execution_results (
+                id text PRIMARY KEY,
+                run_id text NOT NULL REFERENCES execution_runs(id) ON DELETE CASCADE,
+                plugin_id text NOT NULL,
+                target_id text NOT NULL,
+                status text NOT NULL,
+                result_type text NOT NULL,
+                summary text NOT NULL,
+                metrics jsonb NOT NULL,
+                payload jsonb NOT NULL,
+                created_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_execution_results_run_plugin
+                ON execution_results(run_id, plugin_id);
+
             CREATE TABLE IF NOT EXISTS quality_curve_groups (
                 id text PRIMARY KEY,
                 name text NOT NULL,

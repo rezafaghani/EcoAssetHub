@@ -57,6 +57,7 @@ public class Worker(
             }
         }
 
+        await QueueDueExecutionDefinitionsAsync(scope.ServiceProvider, now, cancellationToken);
         await QueueDueQualityJobsAsync(scope.ServiceProvider, now, cancellationToken);
     }
 
@@ -109,10 +110,59 @@ public class Worker(
         }
     }
 
+    private async Task QueueDueExecutionDefinitionsAsync(IServiceProvider services, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(options.Value.ExecutionApiBaseUrl))
+        {
+            return;
+        }
+
+        var repository = services.GetRequiredService<IExecutionRepository>();
+        var client = httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(options.Value.ExecutionApiBaseUrl.TrimEnd('/') + "/");
+
+        foreach (var definition in await repository.GetEnabledDefinitionsAsync(cancellationToken))
+        {
+            try
+            {
+                if (!IsDue(definition, now))
+                {
+                    continue;
+                }
+
+                var response = await client.PostAsJsonAsync(
+                    $"api/execution-definitions/{Uri.EscapeDataString(definition.Id)}/runs",
+                    new RunExecutionDefinitionRequest(null, null, "scheduled"),
+                    cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("Execution definition {DefinitionId} returned {StatusCode}.", definition.Id, response.StatusCode);
+                    continue;
+                }
+
+                await repository.MarkDefinitionQueuedAsync(definition.Id, now, cancellationToken);
+                logger.LogInformation("Queued execution definition {DefinitionId}.", definition.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to queue execution definition {DefinitionId}.", definition.Id);
+            }
+        }
+    }
+
     private static bool IsDue(QualityValidationJobDto job, DateTimeOffset now)
     {
         var from = job.LastQueuedAt ?? job.CreatedAt.AddMinutes(-1);
         var expression = CronExpression.Parse(job.CronExpression);
+        var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
+        return next.HasValue && next.Value <= now;
+    }
+
+    private static bool IsDue(ExecutionDefinitionDto definition, DateTimeOffset now)
+    {
+        var from = definition.LastQueuedAt ?? definition.CreatedAt.AddMinutes(-1);
+        var expression = CronExpression.Parse(definition.CronExpression);
         var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
         return next.HasValue && next.Value <= now;
     }
