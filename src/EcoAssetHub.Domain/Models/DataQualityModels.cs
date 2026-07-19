@@ -43,6 +43,16 @@ public record QualityCurveGroupDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
+public record QualityCurveGroupMemberDto(
+    string GroupId,
+    string DatasetId,
+    string CurveId,
+    DateTimeOffset CreatedAt);
+
+public record ReplaceQualityCurveGroupMembersRequest(List<QualityCurveGroupMemberRequest> Members);
+
+public record QualityCurveGroupMemberRequest(string DatasetId, string CurveId);
+
 public record UpsertQualityCurveGroupRequest(
     string? Id,
     string Name,
@@ -206,3 +216,14 @@ public record ManualQualityEvaluationResult(
     string OverallStatus,
     List<QualityFindingDraftDto> Findings,
     string? ExecutionId = null);
+
+public record RunQualityJobRequest(string? Start, string? End);
+
+public record RunQualityJobResult(
+    string JobId,
+    string TriggerType,
+    int TargetCount,
+    int CompletedCount,
+    int FindingCount,
+    int CriticalCount,
+    List<ManualQualityEvaluationResult> Results);

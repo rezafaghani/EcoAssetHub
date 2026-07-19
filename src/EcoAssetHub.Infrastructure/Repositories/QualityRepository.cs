@@ -75,6 +75,59 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         return await reader.ReadAsync(cancellationToken) ? ReadGroup(reader) : null;
     }
 
+    public async Task<List<QualityCurveGroupMemberDto>> GetCurveGroupMembersAsync(string groupId, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT group_id, dataset_id, curve_id, created_at
+            FROM quality_curve_group_members
+            WHERE group_id = @group_id
+            ORDER BY curve_id, dataset_id
+            """);
+        command.Parameters.AddWithValue("group_id", groupId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<QualityCurveGroupMemberDto>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(ReadGroupMember(reader));
+        }
+
+        return result;
+    }
+
+    public async Task<List<QualityCurveGroupMemberDto>> ReplaceCurveGroupMembersAsync(string groupId, ReplaceQualityCurveGroupMembersRequest request, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM quality_curve_group_members WHERE group_id = @group_id";
+            delete.Parameters.AddWithValue("group_id", groupId);
+            await delete.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        foreach (var member in request.Members.DistinctBy(x => x.DatasetId))
+        {
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+                INSERT INTO quality_curve_group_members (group_id, dataset_id, curve_id, created_at)
+                VALUES (@group_id, @dataset_id, @curve_id, @created_at)
+                """;
+            insert.Parameters.AddWithValue("group_id", groupId);
+            insert.Parameters.AddWithValue("dataset_id", member.DatasetId);
+            insert.Parameters.AddWithValue("curve_id", member.CurveId);
+            insert.Parameters.AddWithValue("created_at", now);
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await GetCurveGroupMembersAsync(groupId, cancellationToken);
+    }
+
     public async Task<List<QualityValidationJobDto>> GetJobsAsync(CancellationToken cancellationToken = default)
     {
         await using var command = context.Postgres.CreateCommand($"{JobSelectSql} ORDER BY j.updated_at DESC");
@@ -479,6 +532,12 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         Json(reader.GetString(6)),
         reader.GetFieldValue<DateTimeOffset>(7),
         reader.GetFieldValue<DateTimeOffset>(8));
+
+    private static QualityCurveGroupMemberDto ReadGroupMember(NpgsqlDataReader reader) => new(
+        reader.GetString(0),
+        reader.GetString(1),
+        reader.GetString(2),
+        reader.GetFieldValue<DateTimeOffset>(3));
 
     private static QualityFindingDto ReadFinding(NpgsqlDataReader reader) => new(
         reader.GetString(0),

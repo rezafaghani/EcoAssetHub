@@ -7,6 +7,8 @@ public interface IQualityRepository
     Task<List<QualityCurveGroupDto>> GetCurveGroupsAsync(CancellationToken cancellationToken = default);
     Task<QualityCurveGroupDto> UpsertCurveGroupAsync(UpsertQualityCurveGroupRequest request, CancellationToken cancellationToken = default);
     Task<QualityCurveGroupDto?> SetCurveGroupEnabledAsync(string id, bool enabled, CancellationToken cancellationToken = default);
+    Task<List<QualityCurveGroupMemberDto>> GetCurveGroupMembersAsync(string groupId, CancellationToken cancellationToken = default);
+    Task<List<QualityCurveGroupMemberDto>> ReplaceCurveGroupMembersAsync(string groupId, ReplaceQualityCurveGroupMembersRequest request, CancellationToken cancellationToken = default);
     Task<List<QualityValidationJobDto>> GetJobsAsync(CancellationToken cancellationToken = default);
     Task<QualityValidationJobDto?> GetJobAsync(string id, CancellationToken cancellationToken = default);
     Task<QualityValidationJobDto> UpsertJobAsync(UpsertQualityValidationJobRequest request, CancellationToken cancellationToken = default);

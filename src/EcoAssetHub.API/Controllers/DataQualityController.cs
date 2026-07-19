@@ -47,6 +47,20 @@ public class DataQualityController(
         return group is null ? NotFound() : Ok(group);
     }
 
+    [HttpGet("groups/{id}/members")]
+    [ProducesResponseType(typeof(List<QualityCurveGroupMemberDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GroupMembers([FromRoute] string id, CancellationToken cancellationToken)
+    {
+        return Ok(await qualityRepository.GetCurveGroupMembersAsync(id, cancellationToken));
+    }
+
+    [HttpPut("groups/{id}/members")]
+    [ProducesResponseType(typeof(List<QualityCurveGroupMemberDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ReplaceGroupMembers([FromRoute] string id, [FromBody] ReplaceQualityCurveGroupMembersRequest request, CancellationToken cancellationToken)
+    {
+        return Ok(await qualityRepository.ReplaceCurveGroupMembersAsync(id, request, cancellationToken));
+    }
+
     [HttpGet("jobs")]
     [ProducesResponseType(typeof(List<QualityValidationJobDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> Jobs(CancellationToken cancellationToken)
@@ -94,6 +108,59 @@ public class DataQualityController(
     {
         var job = await qualityRepository.SetJobEnabledAsync(id, request.Enabled, cancellationToken);
         return job is null ? NotFound() : Ok(job);
+    }
+
+    [HttpPost("jobs/{id}/runs")]
+    [ProducesResponseType(typeof(RunQualityJobResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RunJob([FromRoute] string id, [FromBody] RunQualityJobRequest request, CancellationToken cancellationToken)
+    {
+        var job = await qualityRepository.GetJobAsync(id, cancellationToken);
+        if (job is null)
+        {
+            return NotFound();
+        }
+
+        if (!DateTimeExpression.TryResolve(request.Start ?? job.WindowStartExpression, out var start, job.TimeZone)
+            || !DateTimeExpression.TryResolve(request.End ?? job.WindowEndExpression, out var end, job.TimeZone)
+            || start >= end)
+        {
+            return BadRequest("A valid half-open evaluation window is required.");
+        }
+
+        var validatorIds = job.Checks.Where(x => x.Enabled).Select(x => x.ValidatorId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (validatorIds.Count == 0)
+        {
+            return BadRequest("The quality job has no enabled validation checks.");
+        }
+
+        try
+        {
+            var datasetIds = await ResolveTargetDatasetIds(job, cancellationToken);
+            var results = new List<ManualQualityEvaluationResult>();
+            foreach (var datasetId in datasetIds)
+            {
+                var result = await EvaluateDataset(datasetId, start, end, null, job.TimeZone, validatorIds, cancellationToken);
+                if (result is not null)
+                {
+                    results.Add(result);
+                }
+            }
+
+            return Ok(new RunQualityJobResult(
+                job.Id,
+                "manual",
+                datasetIds.Count,
+                results.Count,
+                results.Sum(x => x.Findings.Count),
+                results.Sum(x => x.Findings.Count(finding => finding.Severity == "critical")),
+                results));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
     }
 
     [HttpGet("findings")]
@@ -151,19 +218,40 @@ public class DataQualityController(
             asOf = parsedAsOf;
         }
 
-        var metadata = await datasetRepository.GetAsync(request.DatasetId, cancellationToken);
+        try
+        {
+            var result = await EvaluateDataset(request.DatasetId, start, end, asOf, request.TimeZone, null, cancellationToken, request);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    private async Task<ManualQualityEvaluationResult?> EvaluateDataset(
+        string datasetId,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        DateTimeOffset? asOf,
+        string? timeZone,
+        HashSet<string>? validatorIds,
+        CancellationToken cancellationToken,
+        ManualQualityEvaluationRequest? request = null)
+    {
+        var metadata = await datasetRepository.GetAsync(datasetId, cancellationToken);
         if (metadata is null)
         {
-            return NotFound();
+            return null;
         }
 
-        if (!TryParseDuration(request.Granularity ?? metadata.Granularity, out var granularity)
-            || !TryParseOptionalDuration(request.AllowedDelay, out var allowedDelay))
+        if (!TryParseDuration(request?.Granularity ?? metadata.Granularity, out var granularity)
+            || !TryParseOptionalDuration(request?.AllowedDelay, out var allowedDelay))
         {
-            return BadRequest("Granularity and allowedDelay must be ISO-8601 durations, for example PT15M.");
+            throw new ArgumentException("Granularity and allowedDelay must be ISO-8601 durations, for example PT15M.");
         }
 
-        var points = await timeSeriesRepository.GetSeriesAsync(request.DatasetId, start, end, asOf, cancellationToken);
+        var points = await timeSeriesRepository.GetSeriesAsync(datasetId, start, end, asOf, cancellationToken);
         var findings = QualityValidationEngine.Evaluate(new QualityEvaluationRequest(
             metadata,
             start,
@@ -171,17 +259,41 @@ public class DataQualityController(
             DateTimeOffset.UtcNow,
             granularity,
             allowedDelay,
-            request.MinimumValue,
-            request.MaximumValue,
-            request.MaximumAbsoluteChange,
-            request.MaximumPercentageChange,
-            request.NearZeroFloor ?? 0.000001,
-            request.FlatLinePointCount ?? 0,
+            request?.MinimumValue,
+            request?.MaximumValue,
+            request?.MaximumAbsoluteChange,
+            request?.MaximumPercentageChange,
+            request?.NearZeroFloor ?? 0.000001,
+            request?.FlatLinePointCount ?? 0,
             points));
+
+        if (validatorIds is not null)
+        {
+            findings = findings.Where(x => validatorIds.Contains(x.ValidatorId)).ToList();
+        }
 
         var result = new ManualQualityEvaluationResult(metadata, start, end, points.Count, OverallStatus(findings), findings);
         var executionId = await qualityRepository.SaveManualEvaluationAsync(result, cancellationToken);
-        return Ok(result with { ExecutionId = executionId });
+        return result with { ExecutionId = executionId };
+    }
+
+    private async Task<List<string>> ResolveTargetDatasetIds(QualityValidationJobDto job, CancellationToken cancellationToken)
+    {
+        var ids = new List<string>();
+        foreach (var target in job.Targets)
+        {
+            if (target.TargetType == "dataset")
+            {
+                ids.Add(target.TargetId);
+            }
+            else if (target.TargetType == "group")
+            {
+                var members = await qualityRepository.GetCurveGroupMembersAsync(target.TargetId, cancellationToken);
+                ids.AddRange(members.Select(x => x.DatasetId));
+            }
+        }
+
+        return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private static string OverallStatus(List<QualityFindingDraftDto> findings)

@@ -97,6 +97,60 @@ public class DataQualityControllerTests
         qualityRepository.Verify(x => x.SaveManualEvaluationAsync(It.IsAny<ManualQualityEvaluationResult>(), CancellationToken.None), Times.Once);
     }
 
+    [Fact]
+    public async Task RunJob_EvaluatesDirectDatasetTargets()
+    {
+        var qualityRepository = new Mock<IQualityRepository>();
+        qualityRepository.Setup(x => x.GetJobAsync("job-1", CancellationToken.None))
+            .ReturnsAsync(new QualityValidationJobDto(
+                "job-1",
+                "Job",
+                "",
+                true,
+                "*/15 * * * *",
+                "UTC",
+                "2026-01-01T10:00:00Z",
+                "2026-01-01T11:00:00Z",
+                4,
+                300,
+                default,
+                [new QualityValidationJobTargetDto("dataset", "dataset-1", default)],
+                [new QualityValidationJobCheckDto("check-1", "completeness.missing-timestamps", 1, true, default, default, 0)],
+                DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+                DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
+        qualityRepository.Setup(x => x.SaveManualEvaluationAsync(It.IsAny<ManualQualityEvaluationResult>(), CancellationToken.None))
+            .ReturnsAsync("execution-1");
+        var datasetRepository = new Mock<IDatasetRepository>();
+        datasetRepository.Setup(x => x.GetAsync("dataset-1", CancellationToken.None))
+            .ReturnsAsync(new DatasetMetadataDto
+            {
+                Id = "dataset-1",
+                CurveId = "curve-1",
+                Source = "energinet",
+                DataKind = "actual",
+                Category = "price",
+                Granularity = "PT15M",
+                Unit = "EUR/MWh"
+            });
+        var timeSeriesRepository = new Mock<ITimeSeriesRepository>();
+        timeSeriesRepository.Setup(x => x.GetSeriesAsync(
+                "dataset-1",
+                DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
+                DateTimeOffset.Parse("2026-01-01T11:00:00Z"),
+                null,
+                CancellationToken.None))
+            .ReturnsAsync([new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:00:00Z"), Value = 1 }]);
+
+        var result = await Controller(datasetRepository.Object, timeSeriesRepository.Object, qualityRepository.Object)
+            .RunJob("job-1", new RunQualityJobRequest(null, null), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var run = Assert.IsType<RunQualityJobResult>(ok.Value);
+        Assert.Equal(1, run.TargetCount);
+        Assert.Equal(1, run.CompletedCount);
+        Assert.True(run.FindingCount > 0);
+    }
+
     private static DataQualityController Controller(
         IDatasetRepository? datasetRepository = null,
         ITimeSeriesRepository? timeSeriesRepository = null,
