@@ -11,7 +11,16 @@ public class DatasetsControllerTests
     public async Task Series_RejectsEmptyRange()
     {
         var result = await new DatasetsController(Mock.Of<IDatasetRepository>(), Mock.Of<ITimeSeriesRepository>())
-            .Series("dataset-1", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", null, null, CancellationToken.None);
+            .Series("dataset-1", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", null, null, null, CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Series_RejectsInvalidLimit()
+    {
+        var result = await new DatasetsController(Mock.Of<IDatasetRepository>(), Mock.Of<ITimeSeriesRepository>())
+            .Series("dataset-1", "2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z", null, null, 10001, CancellationToken.None);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }

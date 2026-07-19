@@ -68,6 +68,7 @@ public class DatasetsController(
         [FromQuery] string end,
         [FromQuery] string? asOf,
         [FromQuery] string? timeZone,
+        [FromQuery] int? limit,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(id)
@@ -76,6 +77,11 @@ public class DatasetsController(
             || startTime >= endTime)
         {
             return BadRequest("A valid dataset id and date range are required.");
+        }
+
+        if (limit is < 1 or > 10000)
+        {
+            return BadRequest("Limit must be between 1 and 10000.");
         }
 
         DateTimeOffset? versionTime = null;
@@ -89,7 +95,7 @@ public class DatasetsController(
             versionTime = parsedAsOf;
         }
 
-        var points = await timeSeriesRepository.GetSeriesAsync(id, startTime, endTime, versionTime, cancellationToken);
+        var points = await timeSeriesRepository.GetSeriesAsync(id, startTime, endTime, versionTime, cancellationToken, limit);
         return Ok(points);
     }
 }

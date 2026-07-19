@@ -52,7 +52,8 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
         DateTimeOffset start,
         DateTimeOffset end,
         DateTimeOffset? asOf,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? limit = null)
     {
         var table = await GetTableAsync(datasetId, cancellationToken);
 
@@ -75,6 +76,7 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
             )
             WHERE rn = 1
             ORDER BY timestamp
+            {{(limit.HasValue ? "LIMIT {limit:Int32}" : "")}}
             """;
         command.AddParameter("datasetId", datasetId);
         command.AddParameter("start", DbValue.Utc(start));
@@ -82,6 +84,10 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
         if (asOf.HasValue)
         {
             command.AddParameter("asOf", DbValue.Utc(asOf.Value));
+        }
+        if (limit.HasValue)
+        {
+            command.AddParameter("limit", limit.Value);
         }
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);

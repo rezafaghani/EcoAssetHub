@@ -63,7 +63,8 @@ public class DataQualityControllerTests
                 DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
                 DateTimeOffset.Parse("2026-01-01T11:00:00Z"),
                 null,
-                CancellationToken.None))
+                CancellationToken.None,
+                10000))
             .ReturnsAsync([
                 new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:00:00Z"), Value = 1 },
                 new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:30:00Z"), Value = 3 },
@@ -138,7 +139,8 @@ public class DataQualityControllerTests
                 DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
                 DateTimeOffset.Parse("2026-01-01T11:00:00Z"),
                 null,
-                CancellationToken.None))
+                CancellationToken.None,
+                10000))
             .ReturnsAsync([new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:00:00Z"), Value = 1 }]);
 
         var result = await Controller(datasetRepository.Object, timeSeriesRepository.Object, qualityRepository.Object)

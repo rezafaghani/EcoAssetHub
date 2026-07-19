@@ -251,7 +251,7 @@ public class DataQualityController(
             throw new ArgumentException("Granularity and allowedDelay must be ISO-8601 durations, for example PT15M.");
         }
 
-        var points = await timeSeriesRepository.GetSeriesAsync(datasetId, start, end, asOf, cancellationToken);
+        var points = await timeSeriesRepository.GetSeriesAsync(datasetId, start, end, asOf, cancellationToken, 10000);
         var findings = QualityValidationEngine.Evaluate(new QualityEvaluationRequest(
             metadata,
             start,
