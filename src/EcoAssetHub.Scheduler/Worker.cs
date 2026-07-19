@@ -69,47 +69,6 @@ public class Worker(
         return next.HasValue && next.Value <= now;
     }
 
-    private async Task QueueDueQualityJobsAsync(IServiceProvider services, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(options.Value.QualityApiBaseUrl))
-        {
-            return;
-        }
-
-        var repository = services.GetRequiredService<IQualityRepository>();
-        var client = httpClientFactory.CreateClient();
-        client.BaseAddress = new Uri(options.Value.QualityApiBaseUrl.TrimEnd('/') + "/");
-
-        foreach (var job in await repository.GetEnabledJobsAsync(cancellationToken))
-        {
-            try
-            {
-                if (!IsDue(job, now))
-                {
-                    continue;
-                }
-
-                var response = await client.PostAsJsonAsync(
-                    $"api/data-quality/jobs/{Uri.EscapeDataString(job.Id)}/runs",
-                    new RunQualityJobRequest(null, null, "scheduled"),
-                    cancellationToken);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    logger.LogWarning("Quality job {JobId} returned {StatusCode}.", job.Id, response.StatusCode);
-                    continue;
-                }
-
-                await repository.MarkJobQueuedAsync(job.Id, now, cancellationToken);
-                logger.LogInformation("Queued quality job {JobId}.", job.Id);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to queue quality job {JobId}.", job.Id);
-            }
-        }
-    }
-
     private async Task QueueDueExecutionDefinitionsAsync(IServiceProvider services, DateTimeOffset now, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.Value.ExecutionApiBaseUrl))
@@ -151,18 +110,50 @@ public class Worker(
         }
     }
 
-    private static bool IsDue(QualityValidationJobDto job, DateTimeOffset now)
+    private async Task QueueDueQualityJobsAsync(IServiceProvider services, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var from = job.LastQueuedAt ?? job.CreatedAt.AddMinutes(-1);
-        var expression = CronExpression.Parse(job.CronExpression);
-        var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
-        return next.HasValue && next.Value <= now;
+        var repository = services.GetRequiredService<IQualityRepository>();
+
+        foreach (var job in await repository.GetEnabledJobsAsync(cancellationToken))
+        {
+            try
+            {
+                if (!IsDue(job, now))
+                {
+                    continue;
+                }
+
+                var message = new ValidationJobMessage
+                {
+                    JobId = job.Id,
+                    ExecutionId = $"quality-execution-{Guid.NewGuid():N}",
+                    TriggerType = "scheduled",
+                    WindowStartExpression = job.WindowStartExpression,
+                    WindowEndExpression = job.WindowEndExpression
+                };
+                await publisher.PublishValidationAsync(message, cancellationToken);
+                await repository.MarkJobQueuedAsync(job.Id, now, cancellationToken);
+                logger.LogInformation("Queued validation job {JobId}.", job.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to queue validation job {JobId}.", job.Id);
+            }
+        }
     }
 
     private static bool IsDue(ExecutionDefinitionDto definition, DateTimeOffset now)
     {
         var from = definition.LastQueuedAt ?? definition.CreatedAt.AddMinutes(-1);
         var expression = CronExpression.Parse(definition.CronExpression);
+        var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
+        return next.HasValue && next.Value <= now;
+    }
+
+    private static bool IsDue(QualityValidationJobDto job, DateTimeOffset now)
+    {
+        var from = job.LastQueuedAt ?? job.CreatedAt.AddMinutes(-1);
+        var expression = CronExpression.Parse(job.CronExpression);
         var next = expression.GetNextOccurrence(from, TimeZoneInfo.Utc);
         return next.HasValue && next.Value <= now;
     }

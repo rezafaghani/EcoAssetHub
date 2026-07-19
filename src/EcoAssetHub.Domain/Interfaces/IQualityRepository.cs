@@ -5,6 +5,8 @@ namespace EcoAssetHub.Domain.Interfaces;
 public interface IQualityRepository
 {
     Task<List<QualityCurveGroupDto>> GetCurveGroupsAsync(CancellationToken cancellationToken = default);
+    Task<List<QualityValidatorTypeDto>> GetValidatorTypesAsync(ValidationPluginUsage usage, CancellationToken cancellationToken = default);
+    Task UpsertValidatorTypesAsync(IEnumerable<RegisteredValidationPluginDto> validators, CancellationToken cancellationToken = default);
     Task<QualityCurveGroupDto> UpsertCurveGroupAsync(UpsertQualityCurveGroupRequest request, CancellationToken cancellationToken = default);
     Task<QualityCurveGroupDto?> SetCurveGroupEnabledAsync(string id, bool enabled, CancellationToken cancellationToken = default);
     Task<List<QualityCurveGroupMemberDto>> GetCurveGroupMembersAsync(string groupId, CancellationToken cancellationToken = default);
@@ -19,4 +21,5 @@ public interface IQualityRepository
     Task<QualityStatusDto?> GetStatusAsync(string? datasetId, string? curveId, CancellationToken cancellationToken = default);
     Task<QualitySummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default);
     Task<string> SaveManualEvaluationAsync(ManualQualityEvaluationResult result, CancellationToken cancellationToken = default);
+    Task<string> SaveJobEvaluationAsync(string executionId, string jobId, string triggerType, ManualQualityEvaluationResult result, CancellationToken cancellationToken = default);
 }

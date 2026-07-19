@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\EcoAssetHub.Insert\EcoAssetHub.Insert.csproj" />
     <ProjectReference Include="..\..\src\EcoAssetHub.Infrastructure\EcoAssetHub.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\EcoAssetHub.Ingestion\EcoAssetHub.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\EcoAssetHub.Validation\EcoAssetHub.Validation.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,6 +2,7 @@ using EcoAssetHub.API.Controllers;
 using EcoAssetHub.API.Infrastructure.Services;
 using EcoAssetHub.Domain.Interfaces;
 using EcoAssetHub.Domain.Models;
+using EcoAssetHub.Domain.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EcoAssetHub.UnitTest.Controllers;
@@ -9,13 +10,13 @@ namespace EcoAssetHub.UnitTest.Controllers;
 public class ExecutionControllerTests
 {
     [Fact]
-    public void Plugins_ReturnsValidationPluginsFromGenericCatalog()
+    public void Plugins_ReturnsEmptyListWhenApiHasNoLocalPlugins()
     {
         var result = Controller().Plugins(ExecutionCategories.Validation);
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var plugins = Assert.IsType<List<ExecutionPluginDto>>(ok.Value);
-        Assert.Contains(plugins, x => x.Id == "timelens.validation.completeness.missing-timestamps");
+        Assert.Empty(plugins);
     }
 
     [Fact]
@@ -42,9 +43,12 @@ public class ExecutionControllerTests
     }
 
     private static ExecutionController Controller() =>
-        new(new ExecutionPluginCatalog(new QualityValidatorCatalog()),
-            Mock.Of<IExecutionRepository>(),
-            Mock.Of<IDatasetRepository>(),
-            Mock.Of<ITimeSeriesRepository>(),
-            Mock.Of<IQualityRepository>());
+        new(new ExecutionPluginRegistry(Plugins()),
+            new ExecutionRuntime(
+                new ExecutionPluginRegistry(Plugins()),
+                Mock.Of<IDatasetRepository>(),
+                Mock.Of<ITimeSeriesRepository>()),
+            Mock.Of<IExecutionRepository>());
+
+    private static List<IExecutionPlugin> Plugins() => [];
 }

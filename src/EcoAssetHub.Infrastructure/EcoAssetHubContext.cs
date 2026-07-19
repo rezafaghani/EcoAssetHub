@@ -240,8 +240,39 @@ public sealed class EcoAssetHubContext
             CREATE INDEX IF NOT EXISTS ix_quality_curve_group_members_dataset
                 ON quality_curve_group_members(dataset_id, curve_id);
 
+            CREATE TABLE IF NOT EXISTS quality_validation_plugins (
+                id text PRIMARY KEY,
+                category text NOT NULL,
+                display_name text NOT NULL,
+                description text NOT NULL,
+                target_type text NOT NULL,
+                configuration_version integer NOT NULL,
+                default_severity text NOT NULL,
+                configuration_schema jsonb NOT NULL,
+                usage integer NOT NULL,
+                registered_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_plugins_usage
+                ON quality_validation_plugins(usage, category);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_templates (
+                id text PRIMARY KEY,
+                name text NOT NULL,
+                description text NOT NULL,
+                tags jsonb NOT NULL,
+                created_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            INSERT INTO quality_validation_templates (id, name, description, tags, created_at, updated_at)
+            VALUES ('default-validation-template', 'Default validation template', 'Default template for existing validation schedules.', '{}'::jsonb, now(), now())
+            ON CONFLICT (id) DO NOTHING;
+
             CREATE TABLE IF NOT EXISTS quality_validation_jobs (
                 id text PRIMARY KEY,
+                template_id text NOT NULL DEFAULT 'default-validation-template' REFERENCES quality_validation_templates(id),
                 name text NOT NULL,
                 description text NOT NULL,
                 enabled boolean NOT NULL,
@@ -259,6 +290,9 @@ public sealed class EcoAssetHubContext
 
             CREATE INDEX IF NOT EXISTS ix_quality_validation_jobs_enabled
                 ON quality_validation_jobs(enabled, updated_at DESC);
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_jobs_template_enabled
+                ON quality_validation_jobs(template_id, enabled, updated_at DESC);
 
             CREATE TABLE IF NOT EXISTS quality_validation_job_targets (
                 job_id text NOT NULL REFERENCES quality_validation_jobs(id) ON DELETE CASCADE,
@@ -392,6 +426,7 @@ public sealed class EcoAssetHubContext
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'energy-charts';
             ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS data_kind text NOT NULL DEFAULT 'actual';
             ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'unknown';
+            ALTER TABLE quality_validation_jobs ADD COLUMN IF NOT EXISTS template_id text NOT NULL DEFAULT 'default-validation-template' REFERENCES quality_validation_templates(id);
             ALTER TABLE quality_validation_jobs ADD COLUMN IF NOT EXISTS last_queued_at timestamptz NULL;
 
             UPDATE energy_datasets

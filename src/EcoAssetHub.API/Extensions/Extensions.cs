@@ -32,9 +32,10 @@ internal static class Extensions
         services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
         services.AddScoped<IQualityRepository, QualityRepository>();
-        services.AddSingleton<QualityValidatorCatalog>();
-        services.AddSingleton<ExecutionPluginCatalog>();
+        services.AddScoped<ExecutionPluginRegistry>();
+        services.AddScoped<ExecutionRuntime>();
         services.AddSingleton<RabbitMqJobPublisher>();
+        services.AddSingleton<IValidationJobPublisher>(sp => sp.GetRequiredService<RabbitMqJobPublisher>());
         services.AddSingleton<ICacheService, CacheService>();
         services.AddMemoryCache();
     }

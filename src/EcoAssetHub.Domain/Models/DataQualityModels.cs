@@ -32,6 +32,28 @@ public record QualityValidatorTypeDto(
     string DefaultSeverity,
     JsonElement ConfigurationSchema);
 
+[Flags]
+public enum ValidationPluginUsage
+{
+    None = 0,
+    Api = 1,
+    Scheduler = 2,
+    Worker = 4
+}
+
+public record RegisteredValidationPluginDto(
+    string Id,
+    string Category,
+    string DisplayName,
+    string Description,
+    string TargetType,
+    int ConfigurationVersion,
+    string DefaultSeverity,
+    JsonElement ConfigurationSchema,
+    ValidationPluginUsage Usage,
+    DateTimeOffset RegisteredAt,
+    DateTimeOffset UpdatedAt);
+
 public record QualityCurveGroupDto(
     string Id,
     string Name,

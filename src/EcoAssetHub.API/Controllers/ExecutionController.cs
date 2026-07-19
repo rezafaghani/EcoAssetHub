@@ -1,27 +1,20 @@
-using System.Text.Json;
-using System.Xml;
 using EcoAssetHub.API.Infrastructure.Services;
 using EcoAssetHub.Domain.Models;
-using EcoAssetHub.Domain.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EcoAssetHub.API.Controllers;
 
 [ApiController]
 public class ExecutionController(
-    ExecutionPluginCatalog pluginCatalog,
-    IExecutionRepository executionRepository,
-    IDatasetRepository datasetRepository,
-    ITimeSeriesRepository timeSeriesRepository,
-    IQualityRepository qualityRepository) : ControllerBase
+    ExecutionPluginRegistry pluginRegistry,
+    ExecutionRuntime executionRuntime,
+    IExecutionRepository executionRepository) : ControllerBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     [HttpGet("api/plugins")]
     [ProducesResponseType(typeof(List<ExecutionPluginDto>), StatusCodes.Status200OK)]
     public IActionResult Plugins([FromQuery] string? category)
     {
-        var plugins = pluginCatalog.List();
+        var plugins = pluginRegistry.List();
         if (!string.IsNullOrWhiteSpace(category))
         {
             plugins = plugins.Where(x => x.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -35,7 +28,7 @@ public class ExecutionController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult Plugin([FromRoute] string id)
     {
-        var plugin = pluginCatalog.List().SingleOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        var plugin = pluginRegistry.List().SingleOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         return plugin is null ? NotFound() : Ok(plugin);
     }
 
@@ -70,7 +63,7 @@ public class ExecutionController(
             return BadRequest("An execution definition requires a name, schedule, evaluation window, target, and plugin.");
         }
 
-        var pluginIds = pluginCatalog.List().Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var pluginIds = pluginRegistry.List().Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (request.Plugins.Any(x => !pluginIds.Contains(x.PluginId)))
         {
             return BadRequest("One or more plugins are not available in this environment.");
@@ -109,7 +102,7 @@ public class ExecutionController(
 
         try
         {
-            var results = await ExecuteDefinition(definition, start, end, cancellationToken);
+            var results = await executionRuntime.ExecuteAsync(definition, start, end, cancellationToken);
             var run = await executionRepository.SaveRunAsync(
                 definition.Id,
                 string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType,
@@ -130,91 +123,5 @@ public class ExecutionController(
     public async Task<IActionResult> Runs([FromQuery] string? definitionId, CancellationToken cancellationToken)
     {
         return Ok(await executionRepository.GetRunsAsync(definitionId, cancellationToken));
-    }
-
-    private async Task<List<ExecutionStepResultDto>> ExecuteDefinition(ExecutionDefinitionDto definition, DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken)
-    {
-        var datasetIds = definition.Targets
-            .Where(x => x.TargetType == "dataset")
-            .Select(x => x.TargetId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var enabledPlugins = definition.Plugins
-            .Where(x => x.Enabled && x.PluginId.StartsWith("timelens.validation.", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        var results = new List<ExecutionStepResultDto>();
-
-        foreach (var datasetId in datasetIds)
-        {
-            var metadata = await datasetRepository.GetAsync(datasetId, cancellationToken)
-                ?? throw new ArgumentException($"Dataset '{datasetId}' was not found.");
-            if (!TryParseDuration(metadata.Granularity, out var granularity))
-            {
-                throw new ArgumentException($"Dataset '{datasetId}' has invalid granularity.");
-            }
-
-            var points = await timeSeriesRepository.GetSeriesAsync(datasetId, start, end, null, cancellationToken, 10000);
-            var findings = QualityValidationEngine.Evaluate(new QualityEvaluationRequest(
-                metadata,
-                start,
-                end,
-                DateTimeOffset.UtcNow,
-                granularity,
-                null,
-                null,
-                null,
-                null,
-                null,
-                0.000001,
-                0,
-                points));
-
-            var selectedIds = enabledPlugins
-                .Select(x => x.PluginId["timelens.validation.".Length..])
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            findings = findings.Where(x => selectedIds.Contains(x.ValidatorId)).ToList();
-            var qualityResult = new ManualQualityEvaluationResult(metadata, start, end, points.Count, OverallStatus(findings), findings);
-            await qualityRepository.SaveManualEvaluationAsync(qualityResult, cancellationToken);
-
-            results.AddRange(findings.Select(finding => new ExecutionStepResultDto(
-                $"timelens.validation.{finding.ValidatorId}",
-                datasetId,
-                finding.QualityStatus,
-                "quality.finding",
-                finding.Title,
-                JsonSerializer.SerializeToElement(new
-                {
-                    finding.ExpectedCount,
-                    finding.ActualCount,
-                    finding.AffectedCount
-                }, JsonOptions),
-                JsonSerializer.SerializeToElement(finding, JsonOptions))));
-        }
-
-        return results;
-    }
-
-    private static string OverallStatus(List<QualityFindingDraftDto> findings)
-    {
-        if (findings.Any(x => x.QualityStatus == QualityStatuses.Critical))
-        {
-            return QualityStatuses.Critical;
-        }
-
-        return findings.Count == 0 ? QualityStatuses.Healthy : QualityStatuses.Degraded;
-    }
-
-    private static bool TryParseDuration(string value, out TimeSpan duration)
-    {
-        try
-        {
-            duration = XmlConvert.ToTimeSpan(value);
-            return duration > TimeSpan.Zero;
-        }
-        catch (FormatException)
-        {
-            duration = default;
-            return false;
-        }
     }
 }
