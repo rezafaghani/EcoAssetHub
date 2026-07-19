@@ -101,6 +101,7 @@ services:
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       RabbitMq__QueueName: ecoassethub.ingestion.jobs
       Scheduler__PollingSeconds: 10
+      Scheduler__ExecutionApiBaseUrl: http://api:8080
     restart: unless-stopped
     depends_on:
       postgres:

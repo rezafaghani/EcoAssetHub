@@ -79,10 +79,9 @@ interface QualitySummary {
 
 interface QualityValidatorType {
   id: string;
-  category: string;
-  displayName: string;
+  name: string;
   description: string;
-  defaultSeverity: string;
+  category: string;
 }
 
 interface QualityGroup {
@@ -100,7 +99,7 @@ interface QualityJob {
   windowStartExpression: string;
   windowEndExpression: string;
   targets: { targetType: string; targetId: string }[];
-  checks: { validatorId: string; enabled: boolean }[];
+  plugins: { pluginId: string; enabled: boolean }[];
 }
 
 const chartBounds = {
@@ -279,9 +278,9 @@ function App() {
     try {
       const [summaryResponse, validatorsResponse, groupsResponse, jobsResponse] = await Promise.all([
         fetch(`${apiBase}/data-quality/summary`),
-        fetch(`${apiBase}/data-quality/validation-types`),
+        fetch(`${apiBase}/plugins?category=validation`),
         fetch(`${apiBase}/data-quality/groups`),
-        fetch(`${apiBase}/data-quality/jobs`)
+        fetch(`${apiBase}/execution-definitions`)
       ]);
       if (!summaryResponse.ok || !validatorsResponse.ok || !groupsResponse.ok || !jobsResponse.ok) {
         throw new Error('Quality admin request failed');
@@ -330,15 +329,15 @@ function App() {
     await loadQualityAdmin(true);
   }
 
-  async function createQualityJobForSelected(validatorId: string) {
+  async function createQualityJobForSelected(pluginId: string) {
     if (!selected) return;
     setError('');
-    const response = await fetch(`${apiBase}/data-quality/jobs`, {
+    const response = await fetch(`${apiBase}/execution-definitions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: `${selected.source} ${selected.category} ${validatorId}`,
-        description: `Quality validation for ${selected.id}`,
+        name: `${selected.source} ${selected.category} ${pluginId}`,
+        description: `TimeLens execution for ${selected.id}`,
         enabled: true,
         cronExpression: suggestCronFromGranularity(selected.granularity) || '*/30 * * * *',
         timeZone,
@@ -348,7 +347,7 @@ function App() {
         timeoutSeconds: 300,
         tags: {},
         targets: [{ targetType: 'dataset', targetId: selected.id, rule: {} }],
-        checks: [{ validatorId, enabled: true, configuration: {}, severity: {} }]
+        plugins: [{ pluginId, enabled: true, configuration: {}, severity: {} }]
       })
     });
     if (!response.ok) {
@@ -361,7 +360,7 @@ function App() {
 
   async function runQualityJob(jobId: string) {
     setError('');
-    const response = await fetch(`${apiBase}/data-quality/jobs/${encodeURIComponent(jobId)}/runs`, {
+    const response = await fetch(`${apiBase}/execution-definitions/${encodeURIComponent(jobId)}/runs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
@@ -371,11 +370,8 @@ function App() {
       return;
     }
 
-    const result = await response.json() as { results: ManualQualityEvaluationResult[] };
-    const selectedResult = selected ? result.results.find(item => item.metadata?.id === selected.id) : null;
-    if (selectedResult) {
-      setQuality(selectedResult);
-    }
+    await response.json();
+    if (selected) await evaluateQuality(selected, true);
     await loadQualityAdmin(true);
   }
 
@@ -794,10 +790,10 @@ function QualityAdminPanel({
   groups: QualityGroup[];
   jobs: QualityJob[];
   onCreateGroup: () => Promise<void>;
-  onCreateJob: (validatorId: string) => Promise<void>;
+  onCreateJob: (pluginId: string) => Promise<void>;
   onRunJob: (jobId: string) => Promise<void>;
 }) {
-  const [validatorId, setValidatorId] = useState('completeness.missing-timestamps');
+  const [validatorId, setValidatorId] = useState('timelens.validation.completeness.missing-timestamps');
   const selectedJobs = selected
     ? jobs.filter(job => job.targets.some(target => target.targetId === selected.id))
     : [];
@@ -812,8 +808,8 @@ function QualityAdminPanel({
     <section className="quality-panel">
       <header className="section-heading">
         <div>
-          <h2>Quality workspace</h2>
-          <p>{groups.length} groups · {jobs.length} jobs · {validators.length} validation types</p>
+          <h2>Execution center</h2>
+          <p>{groups.length} groups · {jobs.length} definitions · {validators.length} validation plugins</p>
         </div>
         <StatusBadge status={summary?.activeCriticalFindings ? 'critical' : summary?.activeFindings ? 'degraded' : 'healthy'} />
       </header>
@@ -827,18 +823,18 @@ function QualityAdminPanel({
 
       <div className="quality-config-row">
         <label>
-          <span>Validation check</span>
+          <span>Plugin</span>
           <select value={validatorId} onChange={event => setValidatorId(event.target.value)}>
-            {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.displayName}</option>)}
+            {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.name}</option>)}
           </select>
         </label>
-        <button type="button" disabled={!selected} onClick={() => void onCreateJob(validatorId)}>Add job</button>
+        <button type="button" disabled={!selected} onClick={() => void onCreateJob(validatorId)}>Add definition</button>
         <button type="button" className="secondary" disabled={!selected} onClick={() => void onCreateGroup()}>Add group</button>
       </div>
 
       <div className="table-scroll compact">
         <table>
-          <thead><tr><th>Job</th><th>Checks</th><th>Schedule</th><th></th></tr></thead>
+          <thead><tr><th>Definition</th><th>Plugins</th><th>Window</th><th></th></tr></thead>
           <tbody>
             {selectedJobs.slice(0, 8).map(job => (
               <tr key={job.id}>
@@ -846,15 +842,15 @@ function QualityAdminPanel({
                   <strong>{job.name}</strong>
                   <small>{job.id}</small>
                 </td>
-                <td>{job.checks.filter(check => check.enabled).map(check => check.validatorId).join(', ')}</td>
+                <td>{job.plugins.filter(plugin => plugin.enabled).map(plugin => plugin.pluginId).join(', ')}</td>
                 <td>{job.windowStartExpression} - {job.windowEndExpression}</td>
                 <td><button type="button" className="table-action" onClick={() => void onRunJob(job.id)}>Run</button></td>
               </tr>
             ))}
           </tbody>
         </table>
-        {selected && selectedJobs.length === 0 && <p className="empty-state">No quality jobs target this dataset yet.</p>}
-        {!selected && <p className="empty-state">Select a dataset to configure quality jobs.</p>}
+        {selected && selectedJobs.length === 0 && <p className="empty-state">No execution definitions target this dataset yet.</p>}
+        {!selected && <p className="empty-state">Select a dataset to configure execution definitions.</p>}
       </div>
     </section>
   );
