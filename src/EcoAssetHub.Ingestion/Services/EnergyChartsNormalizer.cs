@@ -28,6 +28,7 @@ public class EnergyChartsNormalizer
     private static List<NormalizedDataset> NormalizeNamedData(EnergyChartsDatasetDefinition definition, JsonElement root, string property, string unit)
     {
         var timestamps = ReadUnixSeconds(root);
+        var isExchange = definition.Endpoint is "/cbet" or "/cbpf";
         if (!root.TryGetProperty(property, out var items) || items.ValueKind != JsonValueKind.Array)
         {
             return [];
@@ -40,7 +41,7 @@ public class EnergyChartsNormalizer
             var values = ReadNullableDoubles(item, "data");
             result.Add(Create(definition, name, unit, timestamps, values, metadata =>
             {
-                if (definition.Endpoint is "/cbet" or "/cbpf")
+                if (isExchange)
                 {
                     metadata.Neighbor = name;
                 }
@@ -48,7 +49,7 @@ public class EnergyChartsNormalizer
                 {
                     metadata.ProductionType = name;
                 }
-            }));
+            }, dataKind: isExchange ? "forecast" : "actual", category: isExchange ? "exchange" : "power"));
         }
 
         return result;
@@ -64,7 +65,7 @@ public class EnergyChartsNormalizer
             {
                 metadata.ProductionType = productionType;
                 metadata.ForecastType = forecastType;
-            })
+            }, dataKind: "forecast", category: "power")
         ];
     }
 
@@ -86,7 +87,7 @@ public class EnergyChartsNormalizer
             {
                 metadata.ProductionType = GetString(item, "name");
                 metadata.Granularity = GetParameter(definition, "time_step", "yearly");
-            }))
+            }, dataKind: "reference", category: "capacity"))
             .ToList();
     }
 
@@ -95,8 +96,8 @@ public class EnergyChartsNormalizer
         var timestamps = ReadUnixSeconds(root);
         return
         [
-            Create(definition, "renewable_share", "%", timestamps, ReadNullableDoubles(root, "share")),
-            Create(definition, "traffic_signal", "signal", timestamps, ReadNullableDoubles(root, "signal"))
+            Create(definition, "renewable_share", "%", timestamps, ReadNullableDoubles(root, "share"), dataKind: "forecast", category: "share"),
+            Create(definition, "traffic_signal", "signal", timestamps, ReadNullableDoubles(root, "signal"), dataKind: "forecast", category: "signal")
         ];
     }
 
@@ -105,10 +106,10 @@ public class EnergyChartsNormalizer
         var timestamps = ReadUnixSeconds(root);
         return
         [
-            Create(definition, "renewable_share_forecast", "%", timestamps, ReadNullableDoubles(root, "ren_share")),
-            Create(definition, "solar_share_forecast", "%", timestamps, ReadNullableDoubles(root, "solar_share")),
-            Create(definition, "wind_onshore_share_forecast", "%", timestamps, ReadNullableDoubles(root, "wind_onshore_share")),
-            Create(definition, "wind_offshore_share_forecast", "%", timestamps, ReadNullableDoubles(root, "wind_offshore_share"))
+            Create(definition, "renewable_share_forecast", "%", timestamps, ReadNullableDoubles(root, "ren_share"), dataKind: "forecast", category: "share"),
+            Create(definition, "solar_share_forecast", "%", timestamps, ReadNullableDoubles(root, "solar_share"), dataKind: "forecast", category: "share"),
+            Create(definition, "wind_onshore_share_forecast", "%", timestamps, ReadNullableDoubles(root, "wind_onshore_share"), dataKind: "forecast", category: "share"),
+            Create(definition, "wind_offshore_share_forecast", "%", timestamps, ReadNullableDoubles(root, "wind_offshore_share"), dataKind: "forecast", category: "share")
         ];
     }
 
@@ -123,7 +124,7 @@ public class EnergyChartsNormalizer
             .Select(x => DateTimeOffset.ParseExact(x.GetString() ?? string.Empty, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal))
             .ToList();
 
-        return [Create(definition, definition.Endpoint.Trim('/'), "%", timestamps, ReadNullableDoubles(root, "data"), metadata => metadata.Granularity = "daily")];
+        return [Create(definition, definition.Endpoint.Trim('/'), "%", timestamps, ReadNullableDoubles(root, "data"), metadata => metadata.Granularity = "daily", category: "share")];
     }
 
     private static List<NormalizedDataset> NormalizeShare(EnergyChartsDatasetDefinition definition, JsonElement root)
@@ -132,13 +133,13 @@ public class EnergyChartsNormalizer
         var metric = definition.Endpoint.Trim('/').Replace("_share", "_share");
         return
         [
-            Create(definition, metric, "%", timestamps, ReadNullableDoubles(root, "data")),
-            Create(definition, metric + "_forecast", "%", timestamps, ReadNullableDoubles(root, "forecast"), metadata => metadata.ForecastType = "forecast")
+            Create(definition, metric, "%", timestamps, ReadNullableDoubles(root, "data"), category: "share"),
+            Create(definition, metric + "_forecast", "%", timestamps, ReadNullableDoubles(root, "forecast"), metadata => metadata.ForecastType = "forecast", dataKind: "forecast", category: "share")
         ];
     }
 
     private static List<NormalizedDataset> NormalizeArray(EnergyChartsDatasetDefinition definition, JsonElement root, string property, string metric, string unit) =>
-        [Create(definition, metric, unit, ReadUnixSeconds(root), ReadNullableDoubles(root, property))];
+        [Create(definition, metric, unit, ReadUnixSeconds(root), ReadNullableDoubles(root, property), category: ClassifyArray(metric))];
 
     private static NormalizedDataset Create(
         EnergyChartsDatasetDefinition definition,
@@ -146,13 +147,17 @@ public class EnergyChartsNormalizer
         string unit,
         List<DateTimeOffset> timestamps,
         List<double?> values,
-        Action<DatasetMetadataDto>? configure = null)
+        Action<DatasetMetadataDto>? configure = null,
+        string dataKind = "actual",
+        string category = "unknown")
     {
         var metadata = new DatasetMetadataDto
         {
             Source = "energy-charts",
             Endpoint = definition.Endpoint.Trim('/'),
             Metric = metric,
+            DataKind = dataKind,
+            Category = category,
             Unit = unit,
             Country = GetParameter(definition, "country"),
             BiddingZone = GetParameter(definition, "bzn"),
@@ -239,4 +244,11 @@ public class EnergyChartsNormalizer
         if (delta.TotalDays <= 1) return "daily";
         return "periodic";
     }
+
+    private static string ClassifyArray(string metric) => metric switch
+    {
+        "price" => "price",
+        "frequency" => "frequency",
+        _ => "unknown"
+    };
 }
