@@ -182,3 +182,26 @@ public record QualityFindingDraftDto(
     int? ActualCount,
     int? AffectedCount,
     List<DateTimeOffset> SampleTimestamps);
+
+public record ManualQualityEvaluationRequest(
+    string DatasetId,
+    string Start,
+    string End,
+    string? AsOf,
+    string? TimeZone,
+    string? Granularity,
+    string? AllowedDelay,
+    double? MinimumValue,
+    double? MaximumValue,
+    double? MaximumAbsoluteChange,
+    double? MaximumPercentageChange,
+    double? NearZeroFloor,
+    int? FlatLinePointCount);
+
+public record ManualQualityEvaluationResult(
+    DatasetMetadataDto Metadata,
+    DateTimeOffset Start,
+    DateTimeOffset End,
+    int PointCount,
+    string OverallStatus,
+    List<QualityFindingDraftDto> Findings);
