@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { getDatasetCurveId, groupDatasetsByCurve } from './curves';
+import { getDatasetCurveId, groupDatasetsByCurve, type CurveSummary } from './curves';
 import { buildScheduleJobHistoryRows, buildScheduleStatusRows, suggestCronFromGranularity, type IngestionExecution, type IngestionJob, type IngestionSchedule, type ScheduleStatusRow } from './ingestionStatus';
 import './styles.css';
 
@@ -309,7 +309,7 @@ function App() {
               className={selectedCurveId === curve.id ? 'dataset active' : 'dataset'}
               onClick={() => selectCurve(curve.id)}>
               <span>{curve.label}</span>
-              <small>{curve.datasets.length} datasets · {curve.lastIngestedAt ? formatDate(curve.lastIngestedAt, timeZone) : 'not ingested'}</small>
+              <small>{curve.datasets.length} datasets · {curve.providers.join(', ') || 'unknown'} · {curve.categories.join(', ') || 'unknown'} · {curve.dataKinds.join(', ') || 'unknown'}</small>
             </button>
           ))}
         </div>
@@ -327,7 +327,7 @@ function App() {
                     void loadSeries(dataset);
                   }}>
                   <span>{dataset.metric}</span>
-                  <small>{dataset.endpoint} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
+                  <small>{dataset.category} · {dataset.dataKind} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
                 </button>
               ))}
             </div>
@@ -364,7 +364,7 @@ function App() {
 
         {error && <div className="error">{error}</div>}
 
-        <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} />
+        <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -825,11 +825,14 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status.toLowerCase()}`}>{status || 'unknown'}</span>;
 }
 
-function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number; timeZone: string }) {
+function MetadataPanel({ dataset, curve, curveId, datasetCount, timeZone }: { dataset: DatasetMetadata | null; curve: CurveSummary | undefined; curveId: string; datasetCount: number; timeZone: string }) {
   if (!dataset) return <section className="metadata-panel"><h2>Curve details</h2><p>No curve selected.</p></section>;
   const rows = [
     ['Curve', curveId],
     ['Datasets', datasetCount.toLocaleString()],
+    ['Providers', curve?.providers.join(', ') ?? ''],
+    ['Categories', curve?.categories.join(', ') ?? ''],
+    ['Kinds', curve?.dataKinds.join(', ') ?? ''],
     ['Selected dataset', dataset.id],
     ['Source', dataset.source],
     ['Endpoint', dataset.endpoint],

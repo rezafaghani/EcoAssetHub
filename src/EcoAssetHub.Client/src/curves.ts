@@ -1,7 +1,10 @@
 export interface CurveDataset {
   id: string;
   curveId: string;
+  source: string;
   metric: string;
+  dataKind: string;
+  category: string;
   endpoint: string;
   country: string;
   biddingZone: string;
@@ -13,6 +16,9 @@ export interface CurveSummary {
   id: string;
   label: string;
   datasets: CurveDataset[];
+  categories: string[];
+  dataKinds: string[];
+  providers: string[];
   lastIngestedAt: string;
 }
 
@@ -29,10 +35,16 @@ export function groupDatasetsByCurve(datasets: CurveDataset[]): CurveSummary[] {
       id,
       label: id,
       datasets: [],
+      categories: [],
+      dataKinds: [],
+      providers: [],
       lastIngestedAt: ''
     };
 
     curve.datasets.push(dataset);
+    addUnique(curve.categories, dataset.category);
+    addUnique(curve.dataKinds, dataset.dataKind);
+    addUnique(curve.providers, dataset.source);
     if (!curve.lastIngestedAt || dataset.lastIngestedAt > curve.lastIngestedAt) {
       curve.lastIngestedAt = dataset.lastIngestedAt;
     }
@@ -40,4 +52,11 @@ export function groupDatasetsByCurve(datasets: CurveDataset[]): CurveSummary[] {
   }
 
   return Array.from(curves.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function addUnique(values: string[], value: string) {
+  if (value && !values.includes(value)) {
+    values.push(value);
+    values.sort();
+  }
 }
