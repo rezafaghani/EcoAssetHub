@@ -485,6 +485,24 @@ svg text {
   gap: var(--space-2);
 }
 
+.quality-config-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(96px, auto) minmax(104px, auto);
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.quality-config-row label {
+  color: var(--label);
+  display: grid;
+  font-size: 0.76rem;
+  gap: var(--space-1);
+}
+
+.quality-config-row label span {
+  font-weight: 700;
+}
+
 .section-heading p {
   margin: var(--space-1) 0 0;
   color: var(--muted);

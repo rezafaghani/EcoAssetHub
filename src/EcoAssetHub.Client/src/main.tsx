@@ -61,9 +61,46 @@ interface QualityFinding {
 }
 
 interface ManualQualityEvaluationResult {
+  metadata: DatasetMetadata;
+  executionId: string | null;
   pointCount: number;
   overallStatus: string;
   findings: QualityFinding[];
+}
+
+interface QualitySummary {
+  healthy: number;
+  degraded: number;
+  critical: number;
+  unknown: number;
+  activeFindings: number;
+  activeCriticalFindings: number;
+}
+
+interface QualityValidatorType {
+  id: string;
+  category: string;
+  displayName: string;
+  description: string;
+  defaultSeverity: string;
+}
+
+interface QualityGroup {
+  id: string;
+  name: string;
+  groupType: string;
+  enabled: boolean;
+}
+
+interface QualityJob {
+  id: string;
+  name: string;
+  enabled: boolean;
+  cronExpression: string;
+  windowStartExpression: string;
+  windowEndExpression: string;
+  targets: { targetType: string; targetId: string }[];
+  checks: { validatorId: string; enabled: boolean }[];
 }
 
 const chartBounds = {
@@ -102,10 +139,15 @@ function App() {
   const [error, setError] = useState('');
   const [quality, setQuality] = useState<ManualQualityEvaluationResult | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
+  const [qualitySummary, setQualitySummary] = useState<QualitySummary | null>(null);
+  const [qualityValidators, setQualityValidators] = useState<QualityValidatorType[]>([]);
+  const [qualityGroups, setQualityGroups] = useState<QualityGroup[]>([]);
+  const [qualityJobs, setQualityJobs] = useState<QualityJob[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   useEffect(() => {
     void loadDatasets();
+    void loadQualityAdmin();
   }, []);
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
@@ -136,6 +178,7 @@ function App() {
         void evaluateQuality(selected, true);
       }
       setLastLiveRefresh(new Date().toISOString());
+      void loadQualityAdmin(true);
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
@@ -222,12 +265,118 @@ function App() {
       });
       if (!response.ok) throw new Error('Quality evaluation failed');
       setQuality(await response.json() as ManualQualityEvaluationResult);
+      void loadQualityAdmin(true);
     } catch {
       setQuality(null);
       if (!silent) setError('Unable to evaluate data quality.');
     } finally {
       if (!silent) setQualityLoading(false);
     }
+  }
+
+  async function loadQualityAdmin(silent = false) {
+    if (!silent) setError('');
+    try {
+      const [summaryResponse, validatorsResponse, groupsResponse, jobsResponse] = await Promise.all([
+        fetch(`${apiBase}/data-quality/summary`),
+        fetch(`${apiBase}/data-quality/validation-types`),
+        fetch(`${apiBase}/data-quality/groups`),
+        fetch(`${apiBase}/data-quality/jobs`)
+      ]);
+      if (!summaryResponse.ok || !validatorsResponse.ok || !groupsResponse.ok || !jobsResponse.ok) {
+        throw new Error('Quality admin request failed');
+      }
+
+      setQualitySummary(await summaryResponse.json() as QualitySummary);
+      setQualityValidators(await validatorsResponse.json() as QualityValidatorType[]);
+      setQualityGroups(await groupsResponse.json() as QualityGroup[]);
+      setQualityJobs(await jobsResponse.json() as QualityJob[]);
+    } catch {
+      if (!silent) setError('Unable to load data quality configuration.');
+    }
+  }
+
+  async function createQualityGroupForSelected() {
+    if (!selected) return;
+    setError('');
+    const groupResponse = await fetch(`${apiBase}/data-quality/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${selected.source} ${selected.category} ${selected.dataKind}`,
+        description: `Static quality group for ${selected.curveId || selected.id}`,
+        groupType: 'static',
+        enabled: true,
+        rule: {},
+        tags: {}
+      })
+    });
+    if (!groupResponse.ok) {
+      setError(await groupResponse.text() || 'Unable to create quality group.');
+      return;
+    }
+
+    const group = await groupResponse.json() as QualityGroup;
+    const memberResponse = await fetch(`${apiBase}/data-quality/groups/${encodeURIComponent(group.id)}/members`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ members: [{ datasetId: selected.id, curveId: getDatasetCurveId(selected) }] })
+    });
+    if (!memberResponse.ok) {
+      setError(await memberResponse.text() || 'Unable to set quality group members.');
+      return;
+    }
+
+    await loadQualityAdmin(true);
+  }
+
+  async function createQualityJobForSelected(validatorId: string) {
+    if (!selected) return;
+    setError('');
+    const response = await fetch(`${apiBase}/data-quality/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${selected.source} ${selected.category} ${validatorId}`,
+        description: `Quality validation for ${selected.id}`,
+        enabled: true,
+        cronExpression: suggestCronFromGranularity(selected.granularity) || '*/30 * * * *',
+        timeZone,
+        windowStartExpression: 'now-24h',
+        windowEndExpression: 'now',
+        maxParallelism: 4,
+        timeoutSeconds: 300,
+        tags: {},
+        targets: [{ targetType: 'dataset', targetId: selected.id, rule: {} }],
+        checks: [{ validatorId, enabled: true, configuration: {}, severity: {} }]
+      })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to create quality job.');
+      return;
+    }
+
+    await loadQualityAdmin(true);
+  }
+
+  async function runQualityJob(jobId: string) {
+    setError('');
+    const response = await fetch(`${apiBase}/data-quality/jobs/${encodeURIComponent(jobId)}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to run quality job.');
+      return;
+    }
+
+    const result = await response.json() as { results: ManualQualityEvaluationResult[] };
+    const selectedResult = selected ? result.results.find(item => item.metadata?.id === selected.id) : null;
+    if (selectedResult) {
+      setQuality(selectedResult);
+    }
+    await loadQualityAdmin(true);
   }
 
   async function loadIngestionStatus(curveId = selectedCurveId, silent = false) {
@@ -485,6 +634,17 @@ function App() {
           onEvaluate={() => evaluateQuality()}
         />
 
+        <QualityAdminPanel
+          selected={selected}
+          summary={qualitySummary}
+          validators={qualityValidators}
+          groups={qualityGroups}
+          jobs={qualityJobs}
+          onCreateGroup={createQualityGroupForSelected}
+          onCreateJob={createQualityJobForSelected}
+          onRunJob={runQualityJob}
+        />
+
         <IngestionStatusPanel
           curveId={selectedCurveId}
           schedules={schedules}
@@ -613,6 +773,88 @@ function QualityPanel({
         </table>
         {dataset && quality && findings.length === 0 && <p className="empty-state">No quality findings for this range.</p>}
         {dataset && !quality && !loading && <p className="empty-state">Quality has not been checked for this range.</p>}
+      </div>
+    </section>
+  );
+}
+
+function QualityAdminPanel({
+  selected,
+  summary,
+  validators,
+  groups,
+  jobs,
+  onCreateGroup,
+  onCreateJob,
+  onRunJob
+}: {
+  selected: DatasetMetadata | null;
+  summary: QualitySummary | null;
+  validators: QualityValidatorType[];
+  groups: QualityGroup[];
+  jobs: QualityJob[];
+  onCreateGroup: () => Promise<void>;
+  onCreateJob: (validatorId: string) => Promise<void>;
+  onRunJob: (jobId: string) => Promise<void>;
+}) {
+  const [validatorId, setValidatorId] = useState('completeness.missing-timestamps');
+  const selectedJobs = selected
+    ? jobs.filter(job => job.targets.some(target => target.targetId === selected.id))
+    : [];
+
+  useEffect(() => {
+    if (validators.length && !validators.some(validator => validator.id === validatorId)) {
+      setValidatorId(validators[0].id);
+    }
+  }, [validators, validatorId]);
+
+  return (
+    <section className="quality-panel">
+      <header className="section-heading">
+        <div>
+          <h2>Quality workspace</h2>
+          <p>{groups.length} groups · {jobs.length} jobs · {validators.length} validation types</p>
+        </div>
+        <StatusBadge status={summary?.activeCriticalFindings ? 'critical' : summary?.activeFindings ? 'degraded' : 'healthy'} />
+      </header>
+
+      <div className="status-summary">
+        <MetricTile label="Healthy" value={(summary?.healthy ?? 0).toLocaleString()} />
+        <MetricTile label="Degraded" value={(summary?.degraded ?? 0).toLocaleString()} />
+        <MetricTile label="Critical" value={(summary?.critical ?? 0).toLocaleString()} />
+        <MetricTile label="Active findings" value={(summary?.activeFindings ?? 0).toLocaleString()} />
+      </div>
+
+      <div className="quality-config-row">
+        <label>
+          <span>Validation check</span>
+          <select value={validatorId} onChange={event => setValidatorId(event.target.value)}>
+            {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.displayName}</option>)}
+          </select>
+        </label>
+        <button type="button" disabled={!selected} onClick={() => void onCreateJob(validatorId)}>Add job</button>
+        <button type="button" className="secondary" disabled={!selected} onClick={() => void onCreateGroup()}>Add group</button>
+      </div>
+
+      <div className="table-scroll compact">
+        <table>
+          <thead><tr><th>Job</th><th>Checks</th><th>Schedule</th><th></th></tr></thead>
+          <tbody>
+            {selectedJobs.slice(0, 8).map(job => (
+              <tr key={job.id}>
+                <td>
+                  <strong>{job.name}</strong>
+                  <small>{job.id}</small>
+                </td>
+                <td>{job.checks.filter(check => check.enabled).map(check => check.validatorId).join(', ')}</td>
+                <td>{job.windowStartExpression} - {job.windowEndExpression}</td>
+                <td><button type="button" className="table-action" onClick={() => void onRunJob(job.id)}>Run</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {selected && selectedJobs.length === 0 && <p className="empty-state">No quality jobs target this dataset yet.</p>}
+        {!selected && <p className="empty-state">Select a dataset to configure quality jobs.</p>}
       </div>
     </section>
   );
