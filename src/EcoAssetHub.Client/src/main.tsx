@@ -135,7 +135,11 @@ function App() {
         ? selectedCurveId
         : resultCurves[0]?.id ?? '';
       const nextCurveDatasets = result.filter(dataset => getDatasetCurveId(dataset) === nextCurveId);
-      const nextSelected = nextCurveDatasets.find(dataset => dataset.id === selected?.id) ?? nextCurveDatasets[0] ?? null;
+      const currentSelected = nextCurveDatasets.find(dataset => dataset.id === selected?.id) ?? null;
+      const realDataset = nextCurveDatasets.find(dataset => !isSeedPlaceholder(dataset)) ?? null;
+      const nextSelected = currentSelected && !isSeedPlaceholder(currentSelected)
+        ? currentSelected
+        : realDataset ?? currentSelected ?? nextCurveDatasets[0] ?? null;
 
       setDatasets(result);
       setSelectedCurveId(nextCurveId);
@@ -244,6 +248,7 @@ function App() {
       setError(await response.text() || 'Unable to queue backload.');
       return false;
     }
+    await loadDatasets(true);
     await loadIngestionStatus(selectedCurveId);
     return true;
   }
@@ -1021,6 +1026,14 @@ function tooltipTransform(point: ChartPoint) {
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function isSeedPlaceholder(dataset: DatasetMetadata) {
+  return dataset.metric === dataset.endpoint
+    && !dataset.productionType
+    && !dataset.forecastType
+    && !dataset.neighbor
+    && ['power', 'capacity', 'exchange', 'share', 'signal'].includes(dataset.category);
 }
 
 function formatDate(value: string, timeZone: string) {
