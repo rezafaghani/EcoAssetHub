@@ -6,6 +6,8 @@ public class DatasetSearchFilter
     public string? CurveId { get; set; }
     public string? Endpoint { get; set; }
     public string? Metric { get; set; }
+    public string? DataKind { get; set; }
+    public string? Category { get; set; }
     public string? Country { get; set; }
     public string? BiddingZone { get; set; }
     public string? Region { get; set; }

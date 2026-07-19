@@ -7,6 +7,8 @@ public class DatasetMetadataDto
     public string Source { get; set; } = "energy-charts";
     public string Endpoint { get; set; } = string.Empty;
     public string Metric { get; set; } = string.Empty;
+    public string DataKind { get; set; } = "actual";
+    public string Category { get; set; } = "unknown";
     public string Unit { get; set; } = string.Empty;
     public string Country { get; set; } = string.Empty;
     public string BiddingZone { get; set; } = string.Empty;
