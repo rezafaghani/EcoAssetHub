@@ -118,7 +118,8 @@ public class DataQualityControllerTests
                 [new QualityValidationJobTargetDto("dataset", "dataset-1", default)],
                 [new QualityValidationJobCheckDto("check-1", "completeness.missing-timestamps", 1, true, default, default, 0)],
                 DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
-                DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
+                DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
+                null));
         qualityRepository.Setup(x => x.SaveManualEvaluationAsync(It.IsAny<ManualQualityEvaluationResult>(), CancellationToken.None))
             .ReturnsAsync("execution-1");
         var datasetRepository = new Mock<IDatasetRepository>();

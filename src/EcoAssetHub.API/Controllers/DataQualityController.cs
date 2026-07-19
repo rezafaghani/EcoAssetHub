@@ -150,7 +150,7 @@ public class DataQualityController(
 
             return Ok(new RunQualityJobResult(
                 job.Id,
-                "manual",
+                string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType,
                 datasetIds.Count,
                 results.Count,
                 results.Sum(x => x.Findings.Count),

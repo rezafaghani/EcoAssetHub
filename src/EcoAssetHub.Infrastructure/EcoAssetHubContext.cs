@@ -172,6 +172,7 @@ public sealed class EcoAssetHubContext
                 max_parallelism integer NOT NULL,
                 timeout_seconds integer NOT NULL,
                 tags jsonb NOT NULL,
+                last_queued_at timestamptz NULL,
                 created_at timestamptz NOT NULL,
                 updated_at timestamptz NOT NULL
             );
@@ -311,6 +312,7 @@ public sealed class EcoAssetHubContext
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'energy-charts';
             ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS data_kind text NOT NULL DEFAULT 'actual';
             ALTER TABLE energy_datasets ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'unknown';
+            ALTER TABLE quality_validation_jobs ADD COLUMN IF NOT EXISTS last_queued_at timestamptz NULL;
 
             UPDATE energy_datasets
             SET data_kind = CASE

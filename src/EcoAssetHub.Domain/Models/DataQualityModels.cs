@@ -77,7 +77,8 @@ public record QualityValidationJobDto(
     List<QualityValidationJobTargetDto> Targets,
     List<QualityValidationJobCheckDto> Checks,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? LastQueuedAt);
 
 public record QualityValidationJobTargetDto(
     string TargetType,
@@ -217,7 +218,7 @@ public record ManualQualityEvaluationResult(
     List<QualityFindingDraftDto> Findings,
     string? ExecutionId = null);
 
-public record RunQualityJobRequest(string? Start, string? End);
+public record RunQualityJobRequest(string? Start, string? End, string? TriggerType = null);
 
 public record RunQualityJobResult(
     string JobId,

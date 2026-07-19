@@ -135,6 +135,13 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         return await ReadJobs(reader, cancellationToken);
     }
 
+    public async Task<List<QualityValidationJobDto>> GetEnabledJobsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand($"{JobSelectSql} WHERE j.enabled = true ORDER BY j.updated_at DESC");
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await ReadJobs(reader, cancellationToken);
+    }
+
     public async Task<QualityValidationJobDto?> GetJobAsync(string id, CancellationToken cancellationToken = default)
     {
         await using var command = context.Postgres.CreateCommand($"{JobSelectSql} WHERE j.id = @id");
@@ -209,6 +216,19 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         command.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
         await command.ExecuteNonQueryAsync(cancellationToken);
         return await GetJobAsync(id, cancellationToken);
+    }
+
+    public async Task MarkJobQueuedAsync(string id, DateTimeOffset queuedAt, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            UPDATE quality_validation_jobs
+            SET last_queued_at = @last_queued_at, updated_at = @updated_at
+            WHERE id = @id
+            """);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("last_queued_at", queuedAt);
+        command.Parameters.AddWithValue("updated_at", queuedAt);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<List<QualityFindingDto>> GetFindingsAsync(string? datasetId, string? curveId, bool activeOnly, CancellationToken cancellationToken = default)
@@ -484,7 +504,7 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         SELECT
             j.id, j.name, j.description, j.enabled, j.cron_expression, j.time_zone,
             j.window_start_expression, j.window_end_expression, j.max_parallelism, j.timeout_seconds,
-            j.tags::text, j.created_at, j.updated_at,
+            j.tags::text, j.created_at, j.updated_at, j.last_queued_at,
             COALESCE(jsonb_agg(DISTINCT jsonb_build_object('targetType', t.target_type, 'targetId', t.target_id, 'rule', t.rule))
                 FILTER (WHERE t.job_id IS NOT NULL), '[]'::jsonb)::text,
             COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', c.id, 'validatorId', c.validator_id, 'validatorVersion', c.validator_version,
@@ -516,7 +536,8 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
                 JsonSerializer.Deserialize<List<QualityValidationJobTargetDto>>(reader.GetString(13), JsonOptions) ?? [],
                 JsonSerializer.Deserialize<List<QualityValidationJobCheckDto>>(reader.GetString(14), JsonOptions) ?? [],
                 reader.GetFieldValue<DateTimeOffset>(11),
-                reader.GetFieldValue<DateTimeOffset>(12)));
+                reader.GetFieldValue<DateTimeOffset>(12),
+                reader.IsDBNull(15) ? null : reader.GetFieldValue<DateTimeOffset>(15)));
         }
 
         return jobs;
