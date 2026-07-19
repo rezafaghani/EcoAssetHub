@@ -121,6 +121,20 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         return result;
     }
 
+    public async Task<DatasetMetadataDto?> SetDeprecatedAsync(string id, bool deprecated, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            UPDATE energy_datasets
+            SET deprecated = @deprecated
+            WHERE id = @id
+            """);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("deprecated", deprecated);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
     private const string SelectSql = """
         SELECT id, curve_id, source, endpoint, metric, data_kind, category, unit, country, bidding_zone, region,
                granularity, production_type, forecast_type, neighbor, license_info, deprecated,

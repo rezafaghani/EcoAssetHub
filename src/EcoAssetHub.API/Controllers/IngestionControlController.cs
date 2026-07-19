@@ -61,6 +61,48 @@ public class IngestionControlController(
         return Ok(await repository.GetExecutionsAsync(null, null, curveId, cancellationToken));
     }
 
+    [HttpPost("schedules")]
+    [ProducesResponseType(typeof(IngestionSchedule), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateSchedule([FromBody] CreateIngestionScheduleRequest request, CancellationToken cancellationToken)
+    {
+        var validation = ValidateScheduleRequest(new UpdateIngestionScheduleRequest(
+            request.CronExpression,
+            request.Enabled,
+            request.WindowStartExpression,
+            request.WindowEndExpression,
+            request.BatchSize));
+        if (validation is not null)
+        {
+            return BadRequest(validation);
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CurveId) || string.IsNullOrWhiteSpace(request.Source) || string.IsNullOrWhiteSpace(request.Endpoint))
+        {
+            return BadRequest("Curve, source, and provider route are required.");
+        }
+
+        var schedule = await repository.CreateScheduleAsync(new IngestionSchedule
+        {
+            Name = string.IsNullOrWhiteSpace(request.Name) ? request.CurveId.Trim() : request.Name.Trim(),
+            CurveId = request.CurveId.Trim(),
+            CronExpression = request.CronExpression.Trim(),
+            DefaultCronExpression = request.CronExpression.Trim(),
+            Enabled = request.Enabled,
+            Source = request.Source.Trim(),
+            Endpoint = request.Endpoint.Trim(),
+            Parameters = request.Parameters ?? [],
+            LookbackHours = request.LookbackHours < 1 ? 48 : request.LookbackHours,
+            WindowStartExpression = request.WindowStartExpression.Trim(),
+            WindowEndExpression = request.WindowEndExpression.Trim(),
+            DefaultWindowStartExpression = request.WindowStartExpression.Trim(),
+            DefaultWindowEndExpression = request.WindowEndExpression.Trim(),
+            BatchSize = request.BatchSize
+        }, cancellationToken);
+
+        return CreatedAtAction(nameof(Schedules), new { curveId = schedule.CurveId }, schedule);
+    }
+
     [HttpPut("schedules/{id}")]
     [ProducesResponseType(typeof(IngestionSchedule), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -192,6 +234,19 @@ public class IngestionControlController(
 public record UpdateIngestionScheduleRequest(
     string CronExpression,
     bool Enabled,
+    string WindowStartExpression,
+    string WindowEndExpression,
+    int BatchSize);
+
+public record CreateIngestionScheduleRequest(
+    string Name,
+    string CurveId,
+    string Source,
+    string Endpoint,
+    Dictionary<string, string> Parameters,
+    string CronExpression,
+    bool Enabled,
+    int LookbackHours,
     string WindowStartExpression,
     string WindowEndExpression,
     int BatchSize);

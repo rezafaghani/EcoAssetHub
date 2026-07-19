@@ -134,6 +134,32 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         }
     }
 
+    public async Task<IngestionSchedule> CreateScheduleAsync(IngestionSchedule schedule, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        schedule.Id = string.IsNullOrWhiteSpace(schedule.Id) ? Guid.NewGuid().ToString("N") : schedule.Id;
+        schedule.DefaultCronExpression = string.IsNullOrWhiteSpace(schedule.DefaultCronExpression) ? schedule.CronExpression : schedule.DefaultCronExpression;
+        schedule.DefaultWindowStartExpression = string.IsNullOrWhiteSpace(schedule.DefaultWindowStartExpression) ? schedule.WindowStartExpression : schedule.DefaultWindowStartExpression;
+        schedule.DefaultWindowEndExpression = string.IsNullOrWhiteSpace(schedule.DefaultWindowEndExpression) ? schedule.WindowEndExpression : schedule.DefaultWindowEndExpression;
+        schedule.CreatedAt = now;
+        schedule.UpdatedAt = now;
+
+        await using var command = context.Postgres.CreateCommand("""
+            INSERT INTO ingestion_schedules (
+                id, curve_id, name, cron_expression, default_cron_expression, enabled, source, endpoint, parameters,
+                lookback_hours, window_start_expression, window_end_expression, default_window_start_expression,
+                default_window_end_expression, batch_size, last_queued_at, created_at, updated_at)
+            VALUES (
+                @id, @curve_id, @name, @cron_expression, @default_cron_expression, @enabled, @source, @endpoint, @parameters,
+                @lookback_hours, @window_start_expression, @window_end_expression, @default_window_start_expression,
+                @default_window_end_expression, @batch_size, @last_queued_at, @created_at, @updated_at)
+            """);
+        AddScheduleParameters(command, schedule);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return schedule;
+    }
+
     public async Task<IngestionSchedule?> UpdateScheduleAsync(IngestionSchedule schedule, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
@@ -175,6 +201,11 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
 
     public async Task<IngestionJobMessage?> TryCreateQueuedJobAsync(IngestionSchedule schedule, DateTimeOffset queuedAt, CancellationToken cancellationToken = default)
     {
+        if (!await HasActiveDatasetAsync(schedule, cancellationToken))
+        {
+            return null;
+        }
+
         await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -395,6 +426,27 @@ public class IngestionControlRepository(EcoAssetHubContext context) : IIngestion
         command.Parameters.AddWithValue("last_queued_at", DbValue.From(schedule.LastQueuedAt));
         command.Parameters.AddWithValue("created_at", schedule.CreatedAt);
         command.Parameters.AddWithValue("updated_at", schedule.UpdatedAt);
+    }
+
+    private async Task<bool> HasActiveDatasetAsync(IngestionSchedule schedule, CancellationToken cancellationToken)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM energy_datasets
+                WHERE curve_id = @curve_id
+                  AND source = @source
+                  AND endpoint = @endpoint
+                  AND deprecated = false
+                  AND request_parameters @> @parameters
+            )
+            """);
+        command.Parameters.AddWithValue("curve_id", schedule.CurveId);
+        command.Parameters.AddWithValue("source", schedule.Source);
+        command.Parameters.AddWithValue("endpoint", schedule.Endpoint.TrimStart('/'));
+        command.Parameters.Add(new NpgsqlParameter("parameters", NpgsqlDbType.Jsonb) { Value = JsonSerializer.Serialize(schedule.Parameters) });
+
+        return await command.ExecuteScalarAsync(cancellationToken) is true;
     }
 
     private static async Task InsertJobAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, IngestionJob job, CancellationToken cancellationToken)

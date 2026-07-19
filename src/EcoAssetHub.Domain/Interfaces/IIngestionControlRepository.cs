@@ -10,6 +10,7 @@ public interface IIngestionControlRepository
     Task<List<IngestionJob>> GetJobsAsync(string? scheduleId, string? curveId, CancellationToken cancellationToken = default);
     Task<List<IngestionExecution>> GetExecutionsAsync(string? jobId, string? scheduleId, string? curveId, CancellationToken cancellationToken = default);
     Task EnsureDefaultSchedulesAsync(IEnumerable<IngestionSchedule> schedules, CancellationToken cancellationToken = default);
+    Task<IngestionSchedule> CreateScheduleAsync(IngestionSchedule schedule, CancellationToken cancellationToken = default);
     Task<IngestionSchedule?> UpdateScheduleAsync(IngestionSchedule schedule, CancellationToken cancellationToken = default);
     Task<IngestionSchedule?> ResetScheduleAsync(string id, CancellationToken cancellationToken = default);
     Task<IngestionJobMessage?> TryCreateQueuedJobAsync(IngestionSchedule schedule, DateTimeOffset queuedAt, CancellationToken cancellationToken = default);

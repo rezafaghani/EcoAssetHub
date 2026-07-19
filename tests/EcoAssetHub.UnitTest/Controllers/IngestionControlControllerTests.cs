@@ -77,6 +77,39 @@ public class IngestionControlControllerTests
             cancellationToken), Times.Once);
     }
 
+    [Fact]
+    public async Task CreateSchedule_CreatesManualSchedule()
+    {
+        var repository = new Mock<IIngestionControlRepository>();
+        var cancellationToken = CancellationToken.None;
+        repository.Setup(x => x.CreateScheduleAsync(It.IsAny<IngestionSchedule>(), cancellationToken))
+            .ReturnsAsync((IngestionSchedule schedule, CancellationToken _) => schedule);
+
+        var result = await CreateController(repository).CreateSchedule(
+            new CreateIngestionScheduleRequest(
+                "Manual forecast",
+                "dk.forecast.solar",
+                "energy-charts",
+                "public_power_forecast",
+                new Dictionary<string, string> { ["country"] = "dk" },
+                "*/30 * * * *",
+                true,
+                48,
+                "now-48h",
+                "now",
+                500),
+            cancellationToken);
+
+        Assert.IsType<CreatedAtActionResult>(result);
+        repository.Verify(x => x.CreateScheduleAsync(
+            It.Is<IngestionSchedule>(schedule =>
+                schedule.CurveId == "dk.forecast.solar"
+                && schedule.Source == "energy-charts"
+                && schedule.Endpoint == "public_power_forecast"
+                && schedule.Enabled),
+            cancellationToken), Times.Once);
+    }
+
     private static IngestionControlController CreateController(Mock<IIngestionControlRepository> repository)
     {
         var datasets = new Mock<IDatasetRepository>();

@@ -248,6 +248,54 @@ function App() {
     return true;
   }
 
+  async function createSchedule(dataset: DatasetMetadata) {
+    setError('');
+    const parameters = { ...dataset.requestParameters };
+    delete parameters.start;
+    delete parameters.end;
+    const response = await fetch(`${apiBase}/ingestion/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${dataset.source} ${dataset.category} ${dataset.dataKind}`,
+        curveId: getDatasetCurveId(dataset),
+        source: dataset.source,
+        endpoint: dataset.endpoint,
+        parameters,
+        cronExpression: suggestCronFromGranularity(dataset.granularity) || '*/30 * * * *',
+        enabled: !dataset.deprecated,
+        lookbackHours: 48,
+        windowStartExpression: 'now-48h',
+        windowEndExpression: 'now',
+        batchSize: 500
+      })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to create schedule.');
+      return false;
+    }
+    await loadIngestionStatus(getDatasetCurveId(dataset));
+    return true;
+  }
+
+  async function setDatasetDeprecated(dataset: DatasetMetadata, deprecated: boolean) {
+    setError('');
+    const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/deprecated`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deprecated })
+    });
+    if (!response.ok) {
+      setError('Unable to update dataset metadata.');
+      return false;
+    }
+
+    const updated = await response.json() as DatasetMetadata;
+    setDatasets(current => current.map(item => item.id === updated.id ? updated : item));
+    setSelected(current => current?.id === updated.id ? updated : current);
+    return true;
+  }
+
   function selectCurve(curveId: string) {
     const curveDatasets = datasets.filter(dataset => getDatasetCurveId(dataset) === curveId);
     const nextSelected = curveDatasets[0] ?? null;
@@ -367,7 +415,7 @@ function App() {
 
         {error && <div className="error">{error}</div>}
 
-        <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} />
+        <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} onSetDeprecated={setDatasetDeprecated} />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -376,7 +424,9 @@ function App() {
           executions={executions}
           latestExecution={latestExecution}
           datasets={selectedCurveDatasets}
+          scheduleDataset={selected}
           timeZone={timeZone}
+          onCreateSchedule={createSchedule}
           onSaveSchedule={saveSchedule}
           onResetSchedule={resetSchedule}
           onCreateBackload={createBackload}
@@ -446,7 +496,9 @@ function IngestionStatusPanel({
   executions,
   latestExecution,
   datasets,
+  scheduleDataset,
   timeZone,
+  onCreateSchedule,
   onSaveSchedule,
   onResetSchedule,
   onCreateBackload
@@ -457,7 +509,9 @@ function IngestionStatusPanel({
   executions: IngestionExecution[];
   latestExecution?: IngestionExecution;
   datasets: DatasetMetadata[];
+  scheduleDataset: DatasetMetadata | null;
   timeZone: string;
+  onCreateSchedule: (dataset: DatasetMetadata) => Promise<boolean>;
   onSaveSchedule: (schedule: IngestionSchedule) => Promise<boolean>;
   onResetSchedule: (scheduleId: string) => Promise<boolean>;
   onCreateBackload: (scheduleId: string, datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) => Promise<boolean>;
@@ -470,6 +524,7 @@ function IngestionStatusPanel({
   const historyRows = historyScheduleId ? buildScheduleJobHistoryRows(historyScheduleId, jobs, executions).slice(0, 20) : [];
   const healthySchedules = scheduleRows.filter(row => row.displayStatus === 'completed' || row.displayStatus === 'working').length;
   const failedSchedules = scheduleRows.filter(row => row.displayStatus === 'failed' || row.displayStatus === 'retrying').length;
+  const defaultDataset = scheduleDataset ?? datasets[0];
 
   return (
     <section className="ingestion-panel">
@@ -478,6 +533,7 @@ function IngestionStatusPanel({
           <h2>Curve ingestion</h2>
           <p>{curveId ? `${curveId} · ` : ''}{schedules.length} schedules · latest result by schedule</p>
         </div>
+        {defaultDataset && <button type="button" onClick={() => void onCreateSchedule(defaultDataset)}>Add schedule</button>}
         {latestExecution && <StatusBadge status={latestExecution.status} />}
       </header>
 
@@ -828,7 +884,21 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status.toLowerCase()}`}>{status || 'unknown'}</span>;
 }
 
-function MetadataPanel({ dataset, curve, curveId, datasetCount, timeZone }: { dataset: DatasetMetadata | null; curve: CurveSummary | undefined; curveId: string; datasetCount: number; timeZone: string }) {
+function MetadataPanel({
+  dataset,
+  curve,
+  curveId,
+  datasetCount,
+  timeZone,
+  onSetDeprecated
+}: {
+  dataset: DatasetMetadata | null;
+  curve: CurveSummary | undefined;
+  curveId: string;
+  datasetCount: number;
+  timeZone: string;
+  onSetDeprecated: (dataset: DatasetMetadata, deprecated: boolean) => Promise<boolean>;
+}) {
   if (!dataset) return <section className="metadata-panel"><h2>Curve details</h2><p>No curve selected.</p></section>;
   const rows = [
     ['Curve', curveId],
@@ -850,6 +920,7 @@ function MetadataPanel({ dataset, curve, curveId, datasetCount, timeZone }: { da
     ['Production type', dataset.productionType],
     ['Forecast type', dataset.forecastType],
     ['Neighbor', dataset.neighbor],
+    ['Discontinued', dataset.deprecated ? 'yes' : 'no'],
     ['Last ingested', formatDate(dataset.lastIngestedAt, timeZone)]
   ].filter(([, value]) => value);
 
@@ -857,6 +928,9 @@ function MetadataPanel({ dataset, curve, curveId, datasetCount, timeZone }: { da
     <section className="metadata-panel">
       <h2>Curve details</h2>
       <dl>{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
+      <button type="button" onClick={() => void onSetDeprecated(dataset, !dataset.deprecated)}>
+        {dataset.deprecated ? 'Mark active' : 'Mark discontinued'}
+      </button>
     </section>
   );
 }

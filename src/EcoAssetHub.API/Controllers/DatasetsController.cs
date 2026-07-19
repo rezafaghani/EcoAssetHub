@@ -50,6 +50,15 @@ public class DatasetsController(
         return dataset is null ? NotFound() : Ok(dataset);
     }
 
+    [HttpPatch("{id}/deprecated")]
+    [ProducesResponseType(typeof(DatasetMetadataDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDeprecated([FromRoute] string id, [FromBody] SetDatasetDeprecatedRequest request, CancellationToken cancellationToken)
+    {
+        var dataset = await datasetRepository.SetDeprecatedAsync(id, request.Deprecated, cancellationToken);
+        return dataset is null ? NotFound() : Ok(dataset);
+    }
+
     [HttpGet("{id}/series")]
     [ProducesResponseType(typeof(List<TimeSeriesPointDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -84,3 +93,5 @@ public class DatasetsController(
         return Ok(points);
     }
 }
+
+public record SetDatasetDeprecatedRequest(bool Deprecated);
