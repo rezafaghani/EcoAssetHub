@@ -21,11 +21,11 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
 
         await using var command = context.Postgres.CreateCommand("""
             INSERT INTO energy_datasets (
-                id, curve_id, source, endpoint, metric, unit, country, bidding_zone, region,
+                id, curve_id, source, endpoint, metric, data_kind, category, unit, country, bidding_zone, region,
                 granularity, production_type, forecast_type, neighbor, license_info, deprecated,
                 request_parameters, first_observed_at, last_ingested_at)
             VALUES (
-                @id, @curve_id, @source, @endpoint, @metric, @unit, @country, @bidding_zone, @region,
+                @id, @curve_id, @source, @endpoint, @metric, @data_kind, @category, @unit, @country, @bidding_zone, @region,
                 @granularity, @production_type, @forecast_type, @neighbor, @license_info, @deprecated,
                 @request_parameters, @first_observed_at, @last_ingested_at)
             ON CONFLICT (id) DO UPDATE SET
@@ -33,6 +33,8 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
                 source = EXCLUDED.source,
                 endpoint = EXCLUDED.endpoint,
                 metric = EXCLUDED.metric,
+                data_kind = EXCLUDED.data_kind,
+                category = EXCLUDED.category,
                 unit = EXCLUDED.unit,
                 country = EXCLUDED.country,
                 bidding_zone = EXCLUDED.bidding_zone,
@@ -73,6 +75,8 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         AddFilter(command, clauses, "endpoint", filter.Endpoint);
         AddFilter(command, clauses, "curve_id", filter.CurveId);
         AddFilter(command, clauses, "metric", filter.Metric);
+        AddFilter(command, clauses, "data_kind", filter.DataKind);
+        AddFilter(command, clauses, "category", filter.Category);
         AddFilter(command, clauses, "country", filter.Country);
         AddFilter(command, clauses, "bidding_zone", filter.BiddingZone);
         AddFilter(command, clauses, "region", filter.Region);
@@ -86,6 +90,8 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
                     curve_id ILIKE @search OR
                     endpoint ILIKE @search OR
                     metric ILIKE @search OR
+                    data_kind ILIKE @search OR
+                    category ILIKE @search OR
                     unit ILIKE @search OR
                     country ILIKE @search OR
                     bidding_zone ILIKE @search OR
@@ -115,8 +121,22 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         return result;
     }
 
+    public async Task<DatasetMetadataDto?> SetDeprecatedAsync(string id, bool deprecated, CancellationToken cancellationToken = default)
+    {
+        await using var command = context.Postgres.CreateCommand("""
+            UPDATE energy_datasets
+            SET deprecated = @deprecated
+            WHERE id = @id
+            """);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("deprecated", deprecated);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
     private const string SelectSql = """
-        SELECT id, curve_id, source, endpoint, metric, unit, country, bidding_zone, region,
+        SELECT id, curve_id, source, endpoint, metric, data_kind, category, unit, country, bidding_zone, region,
                granularity, production_type, forecast_type, neighbor, license_info, deprecated,
                request_parameters::text, first_observed_at, last_ingested_at
         FROM energy_datasets
@@ -160,6 +180,8 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         command.Parameters.AddWithValue("source", dto.Source);
         command.Parameters.AddWithValue("endpoint", dto.Endpoint);
         command.Parameters.AddWithValue("metric", dto.Metric);
+        command.Parameters.AddWithValue("data_kind", dto.DataKind);
+        command.Parameters.AddWithValue("category", dto.Category);
         command.Parameters.AddWithValue("unit", dto.Unit);
         command.Parameters.AddWithValue("country", dto.Country);
         command.Parameters.AddWithValue("bidding_zone", dto.BiddingZone);
@@ -182,18 +204,20 @@ public class DatasetRepository(EcoAssetHubContext context) : IDatasetRepository
         Source = reader.GetString(2),
         Endpoint = reader.GetString(3),
         Metric = reader.GetString(4),
-        Unit = reader.GetString(5),
-        Country = reader.GetString(6),
-        BiddingZone = reader.GetString(7),
-        Region = reader.GetString(8),
-        Granularity = reader.GetString(9),
-        ProductionType = reader.GetString(10),
-        ForecastType = reader.GetString(11),
-        Neighbor = reader.GetString(12),
-        LicenseInfo = reader.GetString(13),
-        Deprecated = reader.GetBoolean(14),
-        RequestParameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(15)) ?? [],
-        FirstObservedAt = reader.GetFieldValue<DateTimeOffset>(16),
-        LastIngestedAt = reader.GetFieldValue<DateTimeOffset>(17)
+        DataKind = reader.GetString(5),
+        Category = reader.GetString(6),
+        Unit = reader.GetString(7),
+        Country = reader.GetString(8),
+        BiddingZone = reader.GetString(9),
+        Region = reader.GetString(10),
+        Granularity = reader.GetString(11),
+        ProductionType = reader.GetString(12),
+        ForecastType = reader.GetString(13),
+        Neighbor = reader.GetString(14),
+        LicenseInfo = reader.GetString(15),
+        Deprecated = reader.GetBoolean(16),
+        RequestParameters = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [],
+        FirstObservedAt = reader.GetFieldValue<DateTimeOffset>(18),
+        LastIngestedAt = reader.GetFieldValue<DateTimeOffset>(19)
     };
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { getDatasetCurveId, groupDatasetsByCurve } from './curves';
+import { getDatasetCurveId, groupDatasetsByCurve, type CurveSummary } from './curves';
 import { buildScheduleJobHistoryRows, buildScheduleStatusRows, suggestCronFromGranularity, type IngestionExecution, type IngestionJob, type IngestionSchedule, type ScheduleStatusRow } from './ingestionStatus';
 import './styles.css';
 
@@ -10,6 +10,8 @@ interface DatasetMetadata {
   source: string;
   endpoint: string;
   metric: string;
+  dataKind: string;
+  category: string;
   unit: string;
   country: string;
   biddingZone: string;
@@ -67,6 +69,8 @@ function App() {
   const [search, setSearch] = useState('');
   const [endpoint, setEndpoint] = useState('');
   const [metric, setMetric] = useState('');
+  const [dataKind, setDataKind] = useState('');
+  const [category, setCategory] = useState('');
   const [start, setStart] = useState(toLocalInput(new Date(Date.now() - 24 * 60 * 60 * 1000)));
   const [end, setEnd] = useState(toLocalInput(new Date()));
   const [asOf, setAsOf] = useState('');
@@ -82,7 +86,10 @@ function App() {
   }, []);
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
+  const providers = useMemo(() => unique(datasets.map(x => x.source)), [datasets]);
   const metrics = useMemo(() => unique(datasets.map(x => x.metric)), [datasets]);
+  const dataKinds = useMemo(() => unique(datasets.map(x => x.dataKind)), [datasets]);
+  const categories = useMemo(() => unique(datasets.map(x => x.category)), [datasets]);
   const curves = useMemo(() => groupDatasetsByCurve(datasets), [datasets]);
   const selectedCurve = curves.find(curve => curve.id === selectedCurveId);
   const selectedCurveDatasets = (selectedCurve?.datasets ?? []) as DatasetMetadata[];
@@ -108,7 +115,7 @@ function App() {
     }, refreshIntervalMs);
 
     return () => window.clearInterval(id);
-  }, [live, selected, selectedCurveId, start, end, asOf, timeZone, search, endpoint, metric]);
+  }, [live, selected, selectedCurveId, start, end, asOf, timeZone, search, endpoint, metric, dataKind, category]);
 
   async function loadDatasets(silent = false) {
     if (!silent) setLoading(true);
@@ -118,6 +125,8 @@ function App() {
       if (search) params.set('search', search);
       if (endpoint) params.set('endpoint', endpoint);
       if (metric) params.set('metric', metric);
+      if (dataKind) params.set('dataKind', dataKind);
+      if (category) params.set('category', category);
       const response = await fetch(`${apiBase}/datasets?${params}`);
       if (!response.ok) throw new Error('Dataset request failed');
       const result = await response.json() as DatasetMetadata[];
@@ -126,7 +135,11 @@ function App() {
         ? selectedCurveId
         : resultCurves[0]?.id ?? '';
       const nextCurveDatasets = result.filter(dataset => getDatasetCurveId(dataset) === nextCurveId);
-      const nextSelected = nextCurveDatasets.find(dataset => dataset.id === selected?.id) ?? nextCurveDatasets[0] ?? null;
+      const currentSelected = nextCurveDatasets.find(dataset => dataset.id === selected?.id) ?? null;
+      const realDataset = nextCurveDatasets.find(dataset => !isSeedPlaceholder(dataset)) ?? null;
+      const nextSelected = currentSelected && !isSeedPlaceholder(currentSelected)
+        ? currentSelected
+        : realDataset ?? currentSelected ?? nextCurveDatasets[0] ?? null;
 
       setDatasets(result);
       setSelectedCurveId(nextCurveId);
@@ -235,7 +248,56 @@ function App() {
       setError(await response.text() || 'Unable to queue backload.');
       return false;
     }
+    await loadDatasets(true);
     await loadIngestionStatus(selectedCurveId);
+    return true;
+  }
+
+  async function createSchedule(dataset: DatasetMetadata) {
+    setError('');
+    const parameters = { ...dataset.requestParameters };
+    delete parameters.start;
+    delete parameters.end;
+    const response = await fetch(`${apiBase}/ingestion/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${dataset.source} ${dataset.category} ${dataset.dataKind}`,
+        curveId: getDatasetCurveId(dataset),
+        source: dataset.source,
+        endpoint: dataset.endpoint,
+        parameters,
+        cronExpression: suggestCronFromGranularity(dataset.granularity) || '*/30 * * * *',
+        enabled: !dataset.deprecated,
+        lookbackHours: 48,
+        windowStartExpression: 'now-48h',
+        windowEndExpression: 'now',
+        batchSize: 500
+      })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to create schedule.');
+      return false;
+    }
+    await loadIngestionStatus(getDatasetCurveId(dataset));
+    return true;
+  }
+
+  async function setDatasetDeprecated(dataset: DatasetMetadata, deprecated: boolean) {
+    setError('');
+    const response = await fetch(`${apiBase}/datasets/${encodeURIComponent(dataset.id)}/deprecated`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deprecated })
+    });
+    if (!response.ok) {
+      setError('Unable to update dataset metadata.');
+      return false;
+    }
+
+    const updated = await response.json() as DatasetMetadata;
+    setDatasets(current => current.map(item => item.id === updated.id ? updated : item));
+    setSelected(current => current?.id === updated.id ? updated : current);
     return true;
   }
 
@@ -264,17 +326,33 @@ function App() {
             <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && void loadDatasets()} placeholder="Dataset name or id" />
           </label>
           <label>
-            <span>Endpoint</span>
-            <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
-              <option value="">All endpoints</option>
-              {endpoints.map(value => <option key={value} value={value}>{value}</option>)}
-            </select>
-          </label>
-          <label>
             <span>Metric</span>
             <select value={metric} onChange={event => setMetric(event.target.value)}>
               <option value="">All metrics</option>
               {metrics.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Series type</span>
+            <select value={dataKind} onChange={event => setDataKind(event.target.value)}>
+              <option value="">All series types</option>
+              {dataKinds.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Category</span>
+            <select value={category} onChange={event => setCategory(event.target.value)}>
+              <option value="">All categories</option>
+              {categories.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Provider route</span>
+            <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
+              <option value="">All provider routes</option>
+              {providers.flatMap(provider => endpoints.map(route => (
+                <option key={`${provider}:${route}`} value={route}>{provider} · {route}</option>
+              )))}
             </select>
           </label>
           <button onClick={() => void loadDatasets()}>Search</button>
@@ -287,7 +365,7 @@ function App() {
               className={selectedCurveId === curve.id ? 'dataset active' : 'dataset'}
               onClick={() => selectCurve(curve.id)}>
               <span>{curve.label}</span>
-              <small>{curve.datasets.length} datasets · {curve.lastIngestedAt ? formatDate(curve.lastIngestedAt, timeZone) : 'not ingested'}</small>
+              <small>{curve.datasets.length} datasets · {curve.providers.join(', ') || 'unknown'} · {curve.categories.join(', ') || 'unknown'} · {curve.dataKinds.join(', ') || 'unknown'}</small>
             </button>
           ))}
         </div>
@@ -305,7 +383,7 @@ function App() {
                     void loadSeries(dataset);
                   }}>
                   <span>{dataset.metric}</span>
-                  <small>{dataset.endpoint} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
+                  <small>{dataset.category} · {dataset.dataKind} · {dataset.country || dataset.biddingZone || dataset.region || 'global'}</small>
                 </button>
               ))}
             </div>
@@ -342,7 +420,7 @@ function App() {
 
         {error && <div className="error">{error}</div>}
 
-        <MetadataPanel dataset={selected} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} />
+        <MetadataPanel dataset={selected} curve={selectedCurve} curveId={selectedCurveId} datasetCount={selectedCurveDatasets.length} timeZone={timeZone} onSetDeprecated={setDatasetDeprecated} />
 
         <IngestionStatusPanel
           curveId={selectedCurveId}
@@ -351,7 +429,9 @@ function App() {
           executions={executions}
           latestExecution={latestExecution}
           datasets={selectedCurveDatasets}
+          scheduleDataset={selected}
           timeZone={timeZone}
+          onCreateSchedule={createSchedule}
           onSaveSchedule={saveSchedule}
           onResetSchedule={resetSchedule}
           onCreateBackload={createBackload}
@@ -421,7 +501,9 @@ function IngestionStatusPanel({
   executions,
   latestExecution,
   datasets,
+  scheduleDataset,
   timeZone,
+  onCreateSchedule,
   onSaveSchedule,
   onResetSchedule,
   onCreateBackload
@@ -432,7 +514,9 @@ function IngestionStatusPanel({
   executions: IngestionExecution[];
   latestExecution?: IngestionExecution;
   datasets: DatasetMetadata[];
+  scheduleDataset: DatasetMetadata | null;
   timeZone: string;
+  onCreateSchedule: (dataset: DatasetMetadata) => Promise<boolean>;
   onSaveSchedule: (schedule: IngestionSchedule) => Promise<boolean>;
   onResetSchedule: (scheduleId: string) => Promise<boolean>;
   onCreateBackload: (scheduleId: string, datasetId: string, windowStartExpression: string, windowEndExpression: string, batchSize: number) => Promise<boolean>;
@@ -445,6 +529,7 @@ function IngestionStatusPanel({
   const historyRows = historyScheduleId ? buildScheduleJobHistoryRows(historyScheduleId, jobs, executions).slice(0, 20) : [];
   const healthySchedules = scheduleRows.filter(row => row.displayStatus === 'completed' || row.displayStatus === 'working').length;
   const failedSchedules = scheduleRows.filter(row => row.displayStatus === 'failed' || row.displayStatus === 'retrying').length;
+  const defaultDataset = scheduleDataset ?? datasets[0];
 
   return (
     <section className="ingestion-panel">
@@ -453,6 +538,7 @@ function IngestionStatusPanel({
           <h2>Curve ingestion</h2>
           <p>{curveId ? `${curveId} · ` : ''}{schedules.length} schedules · latest result by schedule</p>
         </div>
+        {defaultDataset && <button type="button" onClick={() => void onCreateSchedule(defaultDataset)}>Add schedule</button>}
         {latestExecution && <StatusBadge status={latestExecution.status} />}
       </header>
 
@@ -803,15 +889,34 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status.toLowerCase()}`}>{status || 'unknown'}</span>;
 }
 
-function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: DatasetMetadata | null; curveId: string; datasetCount: number; timeZone: string }) {
+function MetadataPanel({
+  dataset,
+  curve,
+  curveId,
+  datasetCount,
+  timeZone,
+  onSetDeprecated
+}: {
+  dataset: DatasetMetadata | null;
+  curve: CurveSummary | undefined;
+  curveId: string;
+  datasetCount: number;
+  timeZone: string;
+  onSetDeprecated: (dataset: DatasetMetadata, deprecated: boolean) => Promise<boolean>;
+}) {
   if (!dataset) return <section className="metadata-panel"><h2>Curve details</h2><p>No curve selected.</p></section>;
   const rows = [
     ['Curve', curveId],
     ['Datasets', datasetCount.toLocaleString()],
+    ['Providers', curve?.providers.join(', ') ?? ''],
+    ['Categories', curve?.categories.join(', ') ?? ''],
+    ['Series types', curve?.dataKinds.join(', ') ?? ''],
     ['Selected dataset', dataset.id],
-    ['Source', dataset.source],
-    ['Endpoint', dataset.endpoint],
+    ['Provider', dataset.source],
+    ['Provider route', dataset.endpoint],
     ['Metric', dataset.metric],
+    ['Series type', dataset.dataKind],
+    ['Category', dataset.category],
     ['Unit', dataset.unit],
     ['Country', dataset.country],
     ['Bidding zone', dataset.biddingZone],
@@ -820,6 +925,7 @@ function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: 
     ['Production type', dataset.productionType],
     ['Forecast type', dataset.forecastType],
     ['Neighbor', dataset.neighbor],
+    ['Discontinued', dataset.deprecated ? 'yes' : 'no'],
     ['Last ingested', formatDate(dataset.lastIngestedAt, timeZone)]
   ].filter(([, value]) => value);
 
@@ -827,6 +933,9 @@ function MetadataPanel({ dataset, curveId, datasetCount, timeZone }: { dataset: 
     <section className="metadata-panel">
       <h2>Curve details</h2>
       <dl>{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{value}</dd></React.Fragment>)}</dl>
+      <button type="button" onClick={() => void onSetDeprecated(dataset, !dataset.deprecated)}>
+        {dataset.deprecated ? 'Mark active' : 'Mark discontinued'}
+      </button>
     </section>
   );
 }
@@ -917,6 +1026,14 @@ function tooltipTransform(point: ChartPoint) {
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+function isSeedPlaceholder(dataset: DatasetMetadata) {
+  return dataset.metric === dataset.endpoint
+    && !dataset.productionType
+    && !dataset.forecastType
+    && !dataset.neighbor
+    && ['power', 'capacity', 'exchange', 'share', 'signal'].includes(dataset.category);
 }
 
 function formatDate(value: string, timeZone: string) {

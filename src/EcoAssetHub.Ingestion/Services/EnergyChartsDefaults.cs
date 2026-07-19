@@ -100,7 +100,7 @@ public static class EnergyChartsDefaults
     };
 
     private static bool IsLatestOnly(string endpoint) =>
-        endpoint is "/signal" or "/ren_share_forecast" or "/solar_share" or "/wind_onshore_share" or "/wind_offshore_share";
+        endpoint.TrimStart('/') is "signal" or "ren_share_forecast" or "solar_share" or "wind_onshore_share" or "wind_offshore_share";
 
     private static string FormatTimestamp(DateTimeOffset value) =>
         value.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss'Z'");

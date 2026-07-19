@@ -16,6 +16,8 @@ public class DatasetsController(
         [FromQuery] string? curveId,
         [FromQuery] string? endpoint,
         [FromQuery] string? metric,
+        [FromQuery] string? dataKind,
+        [FromQuery] string? category,
         [FromQuery] string? country,
         [FromQuery] string? biddingZone,
         [FromQuery] string? region,
@@ -28,6 +30,8 @@ public class DatasetsController(
             CurveId = curveId,
             Endpoint = endpoint,
             Metric = metric,
+            DataKind = dataKind,
+            Category = category,
             Country = country,
             BiddingZone = biddingZone,
             Region = region,
@@ -43,6 +47,15 @@ public class DatasetsController(
     public async Task<IActionResult> Metadata([FromRoute] string id, CancellationToken cancellationToken)
     {
         var dataset = await datasetRepository.GetAsync(id, cancellationToken);
+        return dataset is null ? NotFound() : Ok(dataset);
+    }
+
+    [HttpPatch("{id}/deprecated")]
+    [ProducesResponseType(typeof(DatasetMetadataDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDeprecated([FromRoute] string id, [FromBody] SetDatasetDeprecatedRequest request, CancellationToken cancellationToken)
+    {
+        var dataset = await datasetRepository.SetDeprecatedAsync(id, request.Deprecated, cancellationToken);
         return dataset is null ? NotFound() : Ok(dataset);
     }
 
@@ -80,3 +93,5 @@ public class DatasetsController(
         return Ok(points);
     }
 }
+
+public record SetDatasetDeprecatedRequest(bool Deprecated);

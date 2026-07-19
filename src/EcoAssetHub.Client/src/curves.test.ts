@@ -11,6 +11,9 @@ describe('groupDatasetsByCurve', () => {
 
     expect(curves.find(curve => curve.id === 'dk.public_power')).toMatchObject({
       datasets: [expect.any(Object), expect.any(Object)],
+      categories: ['power'],
+      dataKinds: ['actual', 'forecast'],
+      providers: ['energy-charts'],
       lastIngestedAt: '2026-01-02T00:00:00Z'
     });
     expect(curves.find(curve => curve.id === 'DK1.price')).toMatchObject({
@@ -24,7 +27,10 @@ function dataset(metric: string, curveId: string, lastIngestedAt: string) {
   return {
     id: `${curveId}:${metric}`,
     curveId,
+    source: 'energy-charts',
     metric,
+    dataKind: metric === 'wind' ? 'forecast' : 'actual',
+    category: metric === 'price' ? 'price' : 'power',
     endpoint: 'public_power',
     country: 'dk',
     biddingZone: '',

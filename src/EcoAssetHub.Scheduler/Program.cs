@@ -16,6 +16,7 @@ builder.Services.AddSingleton<EcoAssetHubContext>(sp =>
     return new EcoAssetHubContext(postgres, null);
 });
 builder.Services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
+builder.Services.AddScoped<IDatasetRepository, DatasetRepository>();
 builder.Services.AddSingleton<RabbitMqJobPublisher>();
 builder.Services.AddHostedService<Worker>();
 
@@ -33,9 +34,16 @@ static async Task InitializeAsync(IServiceProvider services)
         {
             using var scope = services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<EcoAssetHubContext>().EnsurePostgresSchemaAsync();
+            var schedules = DefaultSchedules.Create();
+            var datasets = scope.ServiceProvider.GetRequiredService<IDatasetRepository>();
+            foreach (var metadata in DefaultDatasetMetadata.Create(schedules))
+            {
+                await datasets.UpsertAsync(metadata, CancellationToken.None);
+            }
+
             await scope.ServiceProvider
                 .GetRequiredService<IIngestionControlRepository>()
-                .EnsureDefaultSchedulesAsync(DefaultSchedules.Create(), CancellationToken.None);
+                .EnsureDefaultSchedulesAsync(schedules, CancellationToken.None);
             return;
         }
         catch when (attempt < 12)
