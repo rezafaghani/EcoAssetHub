@@ -86,6 +86,7 @@ function App() {
   }, []);
 
   const endpoints = useMemo(() => unique(datasets.map(x => x.endpoint)), [datasets]);
+  const providers = useMemo(() => unique(datasets.map(x => x.source)), [datasets]);
   const metrics = useMemo(() => unique(datasets.map(x => x.metric)), [datasets]);
   const dataKinds = useMemo(() => unique(datasets.map(x => x.dataKind)), [datasets]);
   const categories = useMemo(() => unique(datasets.map(x => x.category)), [datasets]);
@@ -272,13 +273,6 @@ function App() {
             <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === 'Enter' && void loadDatasets()} placeholder="Dataset name or id" />
           </label>
           <label>
-            <span>Endpoint</span>
-            <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
-              <option value="">All endpoints</option>
-              {endpoints.map(value => <option key={value} value={value}>{value}</option>)}
-            </select>
-          </label>
-          <label>
             <span>Metric</span>
             <select value={metric} onChange={event => setMetric(event.target.value)}>
               <option value="">All metrics</option>
@@ -286,9 +280,9 @@ function App() {
             </select>
           </label>
           <label>
-            <span>Kind</span>
+            <span>Series type</span>
             <select value={dataKind} onChange={event => setDataKind(event.target.value)}>
-              <option value="">All kinds</option>
+              <option value="">All series types</option>
               {dataKinds.map(value => <option key={value} value={value}>{value}</option>)}
             </select>
           </label>
@@ -297,6 +291,15 @@ function App() {
             <select value={category} onChange={event => setCategory(event.target.value)}>
               <option value="">All categories</option>
               {categories.map(value => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Provider route</span>
+            <select value={endpoint} onChange={event => setEndpoint(event.target.value)}>
+              <option value="">All provider routes</option>
+              {providers.flatMap(provider => endpoints.map(route => (
+                <option key={`${provider}:${route}`} value={route}>{provider} · {route}</option>
+              )))}
             </select>
           </label>
           <button onClick={() => void loadDatasets()}>Search</button>
@@ -832,12 +835,12 @@ function MetadataPanel({ dataset, curve, curveId, datasetCount, timeZone }: { da
     ['Datasets', datasetCount.toLocaleString()],
     ['Providers', curve?.providers.join(', ') ?? ''],
     ['Categories', curve?.categories.join(', ') ?? ''],
-    ['Kinds', curve?.dataKinds.join(', ') ?? ''],
+    ['Series types', curve?.dataKinds.join(', ') ?? ''],
     ['Selected dataset', dataset.id],
-    ['Source', dataset.source],
-    ['Endpoint', dataset.endpoint],
+    ['Provider', dataset.source],
+    ['Provider route', dataset.endpoint],
     ['Metric', dataset.metric],
-    ['Kind', dataset.dataKind],
+    ['Series type', dataset.dataKind],
     ['Category', dataset.category],
     ['Unit', dataset.unit],
     ['Country', dataset.country],
