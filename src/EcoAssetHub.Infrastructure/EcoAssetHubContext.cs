@@ -134,6 +134,175 @@ public sealed class EcoAssetHubContext
             CREATE INDEX IF NOT EXISTS ix_energy_datasets_filters
                 ON energy_datasets(endpoint, curve_id, metric, data_kind, category, country, bidding_zone, region, granularity);
 
+            CREATE TABLE IF NOT EXISTS quality_curve_groups (
+                id text PRIMARY KEY,
+                name text NOT NULL,
+                description text NOT NULL,
+                group_type text NOT NULL,
+                enabled boolean NOT NULL,
+                rule jsonb NOT NULL,
+                tags jsonb NOT NULL,
+                created_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_curve_groups_enabled_type
+                ON quality_curve_groups(enabled, group_type);
+
+            CREATE TABLE IF NOT EXISTS quality_curve_group_members (
+                group_id text NOT NULL REFERENCES quality_curve_groups(id) ON DELETE CASCADE,
+                dataset_id text NOT NULL,
+                curve_id text NOT NULL,
+                created_at timestamptz NOT NULL,
+                PRIMARY KEY (group_id, dataset_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_curve_group_members_dataset
+                ON quality_curve_group_members(dataset_id, curve_id);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_jobs (
+                id text PRIMARY KEY,
+                name text NOT NULL,
+                description text NOT NULL,
+                enabled boolean NOT NULL,
+                cron_expression text NOT NULL,
+                time_zone text NOT NULL,
+                window_start_expression text NOT NULL,
+                window_end_expression text NOT NULL,
+                max_parallelism integer NOT NULL,
+                timeout_seconds integer NOT NULL,
+                tags jsonb NOT NULL,
+                created_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_jobs_enabled
+                ON quality_validation_jobs(enabled, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_job_targets (
+                job_id text NOT NULL REFERENCES quality_validation_jobs(id) ON DELETE CASCADE,
+                target_type text NOT NULL,
+                target_id text NOT NULL,
+                rule jsonb NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_job_targets_job
+                ON quality_validation_job_targets(job_id);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_job_checks (
+                id text PRIMARY KEY,
+                job_id text NOT NULL REFERENCES quality_validation_jobs(id) ON DELETE CASCADE,
+                validator_id text NOT NULL,
+                validator_version integer NOT NULL,
+                enabled boolean NOT NULL,
+                configuration jsonb NOT NULL,
+                severity jsonb NOT NULL,
+                sort_order integer NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_job_checks_job
+                ON quality_validation_job_checks(job_id, enabled, sort_order);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_executions (
+                id text PRIMARY KEY,
+                job_id text NOT NULL,
+                trigger_type text NOT NULL,
+                status text NOT NULL,
+                queued_at timestamptz NOT NULL,
+                started_at timestamptz NULL,
+                finished_at timestamptz NULL,
+                evaluated_start timestamptz NULL,
+                evaluated_end timestamptz NULL,
+                config_snapshot jsonb NOT NULL,
+                target_snapshot jsonb NOT NULL,
+                target_count integer NOT NULL,
+                completed_count integer NOT NULL,
+                warning_count integer NOT NULL,
+                critical_count integer NOT NULL,
+                technical_failure_count integer NOT NULL,
+                error text NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_executions_job_queued
+                ON quality_validation_executions(job_id, queued_at DESC);
+
+            CREATE TABLE IF NOT EXISTS quality_validation_target_executions (
+                id text PRIMARY KEY,
+                execution_id text NOT NULL REFERENCES quality_validation_executions(id) ON DELETE CASCADE,
+                dataset_id text NOT NULL,
+                curve_id text NOT NULL,
+                status text NOT NULL,
+                started_at timestamptz NULL,
+                finished_at timestamptz NULL,
+                evaluated_start timestamptz NULL,
+                evaluated_end timestamptz NULL,
+                point_count integer NOT NULL,
+                error text NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validation_target_executions_curve
+                ON quality_validation_target_executions(dataset_id, curve_id, started_at DESC);
+
+            CREATE TABLE IF NOT EXISTS quality_validator_executions (
+                id text PRIMARY KEY,
+                target_execution_id text NOT NULL REFERENCES quality_validation_target_executions(id) ON DELETE CASCADE,
+                validator_id text NOT NULL,
+                status text NOT NULL,
+                severity text NOT NULL,
+                duration_ms integer NOT NULL,
+                metrics jsonb NOT NULL,
+                error text NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_validator_executions_target
+                ON quality_validator_executions(target_execution_id, validator_id);
+
+            CREATE TABLE IF NOT EXISTS quality_findings (
+                id text PRIMARY KEY,
+                execution_id text NOT NULL,
+                target_execution_id text NULL,
+                validator_execution_id text NULL,
+                dataset_id text NOT NULL,
+                curve_id text NOT NULL,
+                validator_id text NOT NULL,
+                category text NOT NULL,
+                severity text NOT NULL,
+                quality_status text NOT NULL,
+                trading_impact text NOT NULL,
+                title text NOT NULL,
+                message text NOT NULL,
+                affected_start timestamptz NULL,
+                affected_end timestamptz NULL,
+                expected_count integer NULL,
+                actual_count integer NULL,
+                affected_count integer NULL,
+                sample_timestamps jsonb NOT NULL,
+                details jsonb NOT NULL,
+                fingerprint text NOT NULL,
+                active boolean NOT NULL,
+                created_at timestamptz NOT NULL,
+                updated_at timestamptz NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_findings_active_curve
+                ON quality_findings(active, dataset_id, curve_id, severity, updated_at DESC);
+
+            CREATE INDEX IF NOT EXISTS ix_quality_findings_fingerprint
+                ON quality_findings(fingerprint, active, updated_at DESC);
+
+            CREATE TABLE IF NOT EXISTS quality_status_snapshots (
+                dataset_id text NOT NULL,
+                curve_id text NOT NULL,
+                overall_status text NOT NULL,
+                category_statuses jsonb NOT NULL,
+                latest_execution_id text NOT NULL,
+                as_of timestamptz NOT NULL,
+                PRIMARY KEY (dataset_id, as_of)
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_quality_status_snapshots_curve_latest
+                ON quality_status_snapshots(dataset_id, curve_id, as_of DESC);
+
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS default_cron_expression text NOT NULL DEFAULT '';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_start_expression text NOT NULL DEFAULT 'now-48h';
             ALTER TABLE ingestion_schedules ADD COLUMN IF NOT EXISTS window_end_expression text NOT NULL DEFAULT 'now';

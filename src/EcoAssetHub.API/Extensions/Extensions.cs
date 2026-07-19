@@ -30,6 +30,8 @@ internal static class Extensions
         services.AddScoped<IDatasetRepository, DatasetRepository>();
         services.AddScoped<ITimeSeriesRepository, TimeSeriesRepository>();
         services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
+        services.AddScoped<IQualityRepository, QualityRepository>();
+        services.AddSingleton<QualityValidatorCatalog>();
         services.AddSingleton<RabbitMqJobPublisher>();
         services.AddSingleton<ICacheService, CacheService>();
         services.AddMemoryCache();
