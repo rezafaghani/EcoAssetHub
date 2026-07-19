@@ -69,8 +69,11 @@ public class DataQualityControllerTests
                 new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:30:00Z"), Value = 3 },
                 new TimeSeriesPointDto { Timestamp = DateTimeOffset.Parse("2026-01-01T10:45:00Z"), Value = 4 }
             ]);
+        var qualityRepository = new Mock<IQualityRepository>();
+        qualityRepository.Setup(x => x.SaveManualEvaluationAsync(It.IsAny<ManualQualityEvaluationResult>(), CancellationToken.None))
+            .ReturnsAsync("execution-1");
 
-        var result = await Controller(datasetRepository.Object, timeSeriesRepository.Object)
+        var result = await Controller(datasetRepository.Object, timeSeriesRepository.Object, qualityRepository.Object)
             .Evaluate(new ManualQualityEvaluationRequest(
                 "dataset-1",
                 "2026-01-01T10:00:00Z",
@@ -89,14 +92,17 @@ public class DataQualityControllerTests
         var ok = Assert.IsType<OkObjectResult>(result);
         var evaluation = Assert.IsType<ManualQualityEvaluationResult>(ok.Value);
         Assert.Equal(QualityStatuses.Degraded, evaluation.OverallStatus);
+        Assert.Equal("execution-1", evaluation.ExecutionId);
         Assert.Contains(evaluation.Findings, x => x.ValidatorId == "completeness.missing-timestamps");
+        qualityRepository.Verify(x => x.SaveManualEvaluationAsync(It.IsAny<ManualQualityEvaluationResult>(), CancellationToken.None), Times.Once);
     }
 
     private static DataQualityController Controller(
         IDatasetRepository? datasetRepository = null,
-        ITimeSeriesRepository? timeSeriesRepository = null) =>
+        ITimeSeriesRepository? timeSeriesRepository = null,
+        IQualityRepository? qualityRepository = null) =>
         new(new QualityValidatorCatalog(),
-            Mock.Of<IQualityRepository>(),
+            qualityRepository ?? Mock.Of<IQualityRepository>(),
             datasetRepository ?? Mock.Of<IDatasetRepository>(),
             timeSeriesRepository ?? Mock.Of<ITimeSeriesRepository>());
 }

@@ -229,6 +229,90 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         return new QualitySummaryDto(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), reader.GetInt32(5));
     }
 
+    public async Task<string> SaveManualEvaluationAsync(ManualQualityEvaluationResult result, CancellationToken cancellationToken = default)
+    {
+        var executionId = $"quality-execution-{Guid.NewGuid():N}";
+        var targetExecutionId = $"quality-target-{Guid.NewGuid():N}";
+        var now = DateTimeOffset.UtcNow;
+        await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO quality_validation_executions (
+                    id, job_id, trigger_type, status, queued_at, started_at, finished_at,
+                    evaluated_start, evaluated_end, config_snapshot, target_snapshot, target_count,
+                    completed_count, warning_count, critical_count, technical_failure_count, error)
+                VALUES (
+                    @id, @job_id, 'manual', @status, @now, @now, @now,
+                    @evaluated_start, @evaluated_end, @config_snapshot, @target_snapshot, 1,
+                    1, @warning_count, @critical_count, 0, '')
+                """;
+            command.Parameters.AddWithValue("id", executionId);
+            command.Parameters.AddWithValue("job_id", "manual");
+            command.Parameters.AddWithValue("status", result.Findings.Count == 0 ? QualityExecutionStatuses.Completed : QualityExecutionStatuses.CompletedWithFindings);
+            command.Parameters.AddWithValue("now", now);
+            command.Parameters.AddWithValue("evaluated_start", result.Start);
+            command.Parameters.AddWithValue("evaluated_end", result.End);
+            AddJson(command, "config_snapshot", JsonSerializer.SerializeToElement(new { trigger = "manual" }, JsonOptions));
+            AddJson(command, "target_snapshot", JsonSerializer.SerializeToElement(new[] { result.Metadata.Id }, JsonOptions));
+            command.Parameters.AddWithValue("warning_count", result.Findings.Count(x => x.Severity == "warning"));
+            command.Parameters.AddWithValue("critical_count", result.Findings.Count(x => x.Severity == "critical"));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO quality_validation_target_executions (
+                    id, execution_id, dataset_id, curve_id, status, started_at, finished_at,
+                    evaluated_start, evaluated_end, point_count, error)
+                VALUES (
+                    @id, @execution_id, @dataset_id, @curve_id, @status, @now, @now,
+                    @evaluated_start, @evaluated_end, @point_count, '')
+                """;
+            command.Parameters.AddWithValue("id", targetExecutionId);
+            command.Parameters.AddWithValue("execution_id", executionId);
+            command.Parameters.AddWithValue("dataset_id", result.Metadata.Id);
+            command.Parameters.AddWithValue("curve_id", result.Metadata.CurveId);
+            command.Parameters.AddWithValue("status", result.OverallStatus);
+            command.Parameters.AddWithValue("now", now);
+            command.Parameters.AddWithValue("evaluated_start", result.Start);
+            command.Parameters.AddWithValue("evaluated_end", result.End);
+            command.Parameters.AddWithValue("point_count", result.PointCount);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        foreach (var finding in result.Findings)
+        {
+            await SaveFinding(connection, transaction, executionId, targetExecutionId, result.Metadata, finding, now, cancellationToken);
+        }
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+                INSERT INTO quality_status_snapshots (
+                    dataset_id, curve_id, overall_status, category_statuses, latest_execution_id, as_of)
+                VALUES (
+                    @dataset_id, @curve_id, @overall_status, @category_statuses, @latest_execution_id, @as_of)
+                """;
+            command.Parameters.AddWithValue("dataset_id", result.Metadata.Id);
+            command.Parameters.AddWithValue("curve_id", result.Metadata.CurveId);
+            command.Parameters.AddWithValue("overall_status", result.OverallStatus);
+            AddJson(command, "category_statuses", JsonSerializer.SerializeToElement(CategoryStatuses(result.Findings), JsonOptions));
+            command.Parameters.AddWithValue("latest_execution_id", executionId);
+            command.Parameters.AddWithValue("as_of", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return executionId;
+    }
+
     private static async Task ReplaceJobChildren(NpgsqlConnection connection, NpgsqlTransaction transaction, string jobId, UpsertQualityValidationJobRequest request, CancellationToken cancellationToken)
     {
         await using (var delete = connection.CreateCommand())
@@ -278,6 +362,69 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
             command.Parameters.AddWithValue("sort_order", check.SortOrder ?? order++);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+    }
+
+    private static async Task SaveFinding(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string executionId,
+        string targetExecutionId,
+        DatasetMetadataDto metadata,
+        QualityFindingDraftDto finding,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var fingerprint = $"{metadata.Id}:{finding.ValidatorId}:{finding.AffectedStart:O}:{finding.AffectedEnd:O}";
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO quality_findings (
+                id, execution_id, target_execution_id, validator_execution_id, dataset_id, curve_id,
+                validator_id, category, severity, quality_status, trading_impact, title, message,
+                affected_start, affected_end, expected_count, actual_count, affected_count,
+                sample_timestamps, details, fingerprint, active, created_at, updated_at)
+            VALUES (
+                @id, @execution_id, @target_execution_id, NULL, @dataset_id, @curve_id,
+                @validator_id, @category, @severity, @quality_status, @trading_impact, @title, @message,
+                @affected_start, @affected_end, @expected_count, @actual_count, @affected_count,
+                @sample_timestamps, @details, @fingerprint, true, @created_at, @updated_at)
+            """;
+        command.Parameters.AddWithValue("id", $"quality-finding-{Guid.NewGuid():N}");
+        command.Parameters.AddWithValue("execution_id", executionId);
+        command.Parameters.AddWithValue("target_execution_id", targetExecutionId);
+        command.Parameters.AddWithValue("dataset_id", metadata.Id);
+        command.Parameters.AddWithValue("curve_id", metadata.CurveId);
+        command.Parameters.AddWithValue("validator_id", finding.ValidatorId);
+        command.Parameters.AddWithValue("category", finding.Category);
+        command.Parameters.AddWithValue("severity", finding.Severity);
+        command.Parameters.AddWithValue("quality_status", finding.QualityStatus);
+        command.Parameters.AddWithValue("trading_impact", finding.Severity == "critical" ? "high" : "medium");
+        command.Parameters.AddWithValue("title", finding.Title);
+        command.Parameters.AddWithValue("message", finding.Message);
+        AddNullable(command, "affected_start", finding.AffectedStart);
+        AddNullable(command, "affected_end", finding.AffectedEnd);
+        AddNullable(command, "expected_count", finding.ExpectedCount);
+        AddNullable(command, "actual_count", finding.ActualCount);
+        AddNullable(command, "affected_count", finding.AffectedCount);
+        AddJson(command, "sample_timestamps", JsonSerializer.SerializeToElement(finding.SampleTimestamps, JsonOptions));
+        AddJson(command, "details", JsonSerializer.SerializeToElement(new { }, JsonOptions));
+        command.Parameters.AddWithValue("fingerprint", fingerprint);
+        command.Parameters.AddWithValue("created_at", now);
+        command.Parameters.AddWithValue("updated_at", now);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static Dictionary<string, string> CategoryStatuses(List<QualityFindingDraftDto> findings)
+    {
+        var statuses = new Dictionary<string, string>();
+        foreach (var finding in findings)
+        {
+            statuses[finding.Category] = statuses.TryGetValue(finding.Category, out var current) && current == QualityStatuses.Critical
+                ? current
+                : finding.QualityStatus;
+        }
+
+        return statuses;
     }
 
     private const string JobSelectSql = """
@@ -376,6 +523,11 @@ public class QualityRepository(EcoAssetHubContext context) : IQualityRepository
         {
             Value = value.HasValue ? JsonSerializer.Serialize(value.Value, JsonOptions) : "{}"
         });
+    }
+
+    private static void AddNullable<T>(NpgsqlCommand command, string name, T? value)
+    {
+        command.Parameters.AddWithValue(name, value is null ? DBNull.Value : value);
     }
 
     private static JsonElement Json(string json) => JsonSerializer.Deserialize<JsonElement>(json, JsonOptions);

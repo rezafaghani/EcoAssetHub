@@ -14,4 +14,5 @@ public interface IQualityRepository
     Task<List<QualityFindingDto>> GetFindingsAsync(string? datasetId, string? curveId, bool activeOnly, CancellationToken cancellationToken = default);
     Task<QualityStatusDto?> GetStatusAsync(string? datasetId, string? curveId, CancellationToken cancellationToken = default);
     Task<QualitySummaryDto> GetSummaryAsync(CancellationToken cancellationToken = default);
+    Task<string> SaveManualEvaluationAsync(ManualQualityEvaluationResult result, CancellationToken cancellationToken = default);
 }

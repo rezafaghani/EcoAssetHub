@@ -204,4 +204,5 @@ public record ManualQualityEvaluationResult(
     DateTimeOffset End,
     int PointCount,
     string OverallStatus,
-    List<QualityFindingDraftDto> Findings);
+    List<QualityFindingDraftDto> Findings,
+    string? ExecutionId = null);

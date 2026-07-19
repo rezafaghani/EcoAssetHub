@@ -179,7 +179,9 @@ public class DataQualityController(
             request.FlatLinePointCount ?? 0,
             points));
 
-        return Ok(new ManualQualityEvaluationResult(metadata, start, end, points.Count, OverallStatus(findings), findings));
+        var result = new ManualQualityEvaluationResult(metadata, start, end, points.Count, OverallStatus(findings), findings);
+        var executionId = await qualityRepository.SaveManualEvaluationAsync(result, cancellationToken);
+        return Ok(result with { ExecutionId = executionId });
     }
 
     private static string OverallStatus(List<QualityFindingDraftDto> findings)
