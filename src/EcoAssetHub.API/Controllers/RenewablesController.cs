@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using EcoAssetHub.API.Application.RenewAbleCommands;
 using EcoAssetHub.Domain.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -43,4 +42,15 @@ public class RenewablesController(IRenewableAssetRepository repository) : Contro
     }
 
 
+}
+
+public class RenewAbleDto
+{
+    public required string Id { get; set; }
+    public decimal Capacity { get; set; }
+    public long MeterPointId { get; set; }
+    public decimal? HubHeight { get; set; }
+    public decimal? RotorDiameter { get; set; }
+    public string? CompassOrientation { get; set; }
+    public RenewableAssetType Type { get; set; }
 }
