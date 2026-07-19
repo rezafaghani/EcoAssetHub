@@ -70,7 +70,7 @@ public class TimeSeriesRepository(EcoAssetHubContext context) : ITimeSeriesRepos
                 FROM {{table}}
                 WHERE dataset_id = {datasetId:String}
                   AND timestamp >= {start:DateTime64(3)}
-                  AND timestamp <= {end:DateTime64(3)}
+                  AND timestamp < {end:DateTime64(3)}
                   {{(asOf.HasValue ? "AND as_of <= {asOf:DateTime64(3)}" : "")}}
             )
             WHERE rn = 1

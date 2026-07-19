@@ -73,7 +73,7 @@ public class DatasetsController(
         if (string.IsNullOrWhiteSpace(id)
             || !DateTimeExpression.TryResolve(start, out var startTime, timeZone)
             || !DateTimeExpression.TryResolve(end, out var endTime, timeZone)
-            || startTime > endTime)
+            || startTime >= endTime)
         {
             return BadRequest("A valid dataset id and date range are required.");
         }
