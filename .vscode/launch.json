@@ -6,14 +6,14 @@
             "request": "launch",
             "name": "Client: Vite",
             "url": "http://127.0.0.1:5173",
-            "webRoot": "${workspaceFolder}/src/EcoAssetHub.Client"
+            "webRoot": "${workspaceFolder}/src/TimeLens.Client"
         },
         {
             "type": "chrome",
             "request": "launch",
             "name": "Client: compose",
             "url": "http://localhost:8080",
-            "webRoot": "${workspaceFolder}/src/EcoAssetHub.Client"
+            "webRoot": "${workspaceFolder}/src/TimeLens.Client"
         }
     ]
 }

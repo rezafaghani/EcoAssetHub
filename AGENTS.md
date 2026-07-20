@@ -2,17 +2,17 @@
 
 ## Project Structure & Module Organization
 
-EcoAssetHub is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `EcoAssetHub.API` is the main HTTP API including dataset/time-series reads, `EcoAssetHub.Insert` handles inserts and gRPC ingestion writes, and `EcoAssetHub.Ingestion` plus `EcoAssetHub.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/EcoAssetHub.Domain`; PostgreSQL and ClickHouse repositories and infrastructure live in `src/EcoAssetHub.Infrastructure`. The client app is in `src/EcoAssetHub.Client`. Unit tests are in `tests/EcoAssetHub.UnitTest`, with fixtures in `tests/EcoAssetHub.UnitTest/TestData`.
+TimeLens is a .NET 10 solution with a React/Vite client. Backend projects live under `src/`: `TimeLens.API` is the main HTTP API including dataset/time-series reads, `TimeLens.Insert` handles inserts and gRPC ingestion writes, and `TimeLens.Ingestion` plus `TimeLens.Scheduler` run background ingestion. Shared domain models and interfaces are in `src/TimeLens.Domain`; PostgreSQL and ClickHouse repositories and infrastructure live in `src/TimeLens.Infrastructure`. The client app is in `src/TimeLens.Client`. Unit tests are in `tests/TimeLens.UnitTest`, with fixtures in `tests/TimeLens.UnitTest/TestData`.
 
 ## Build, Test, and Development Commands
 
-- `dotnet restore EcoAssetHub.sln`: restore backend dependencies.
-- `dotnet build EcoAssetHub.sln`: compile all .NET projects.
-- `dotnet test EcoAssetHub.sln`: run xUnit backend tests.
-- `dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj`: run the API locally.
-- `cd src/EcoAssetHub.Client && npm install`: install client dependencies.
-- `cd src/EcoAssetHub.Client && npm start`: start Vite on `127.0.0.1`.
-- `cd src/EcoAssetHub.Client && npm test`: run Vitest.
+- `dotnet restore TimeLens.sln`: restore backend dependencies.
+- `dotnet build TimeLens.sln`: compile all .NET projects.
+- `dotnet test TimeLens.sln`: run xUnit backend tests.
+- `dotnet run --project src/TimeLens.API/TimeLens.API.csproj`: run the API locally.
+- `cd src/TimeLens.Client && npm install`: install client dependencies.
+- `cd src/TimeLens.Client && npm start`: start Vite on `127.0.0.1`.
+- `cd src/TimeLens.Client && npm test`: run Vitest.
 - `docker compose up -d` or `podman compose up -d`: run the full stack from `docker-compose.yml`.
 
 ## Coding Style & Naming Conventions

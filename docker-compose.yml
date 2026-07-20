@@ -1,10 +1,12 @@
+name: timelens
+
 services:
   postgres:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ecoassethub}
-      POSTGRES_USER: ${POSTGRES_USER:-ecoasset}
+      POSTGRES_DB: ${POSTGRES_DB:-timelens}
+      POSTGRES_USER: ${POSTGRES_USER:-timelens}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "5432:5432"
@@ -20,7 +22,7 @@ services:
     image: clickhouse/clickhouse-server:25.3
     restart: unless-stopped
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-ecoassethub}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-timelens}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
     ports:
@@ -40,7 +42,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-ecoassethub}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-timelens}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -53,18 +55,18 @@ services:
   api:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.API/Dockerfile
+      dockerfile: src/TimeLens.API/Dockerfile
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
-      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timelens};Username=${POSTGRES_USER:-timelens};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-timelens};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-timelens}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      RabbitMq__ExchangeName: ecoassethub.jobs
-      RabbitMq__QueueName: ecoassethub.ingestion.jobs
-      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
+      RabbitMq__ExchangeName: timelens.jobs
+      RabbitMq__QueueName: timelens.ingestion.jobs
+      RabbitMq__ValidationQueueName: timelens.validation.jobs
     ports:
       - "5100:8080"
     restart: unless-stopped
@@ -79,10 +81,10 @@ services:
   insert:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.Insert/Dockerfile
+      dockerfile: src/TimeLens.Insert/Dockerfile
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
-      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timelens};Username=${POSTGRES_USER:-timelens};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-timelens};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
     ports:
       - "5101:8080"
       - "5103:8081"
@@ -96,17 +98,17 @@ services:
   scheduler:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.Scheduler/Dockerfile
+      dockerfile: src/TimeLens.Scheduler/Dockerfile
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timelens};Username=${POSTGRES_USER:-timelens};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-timelens}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      RabbitMq__ExchangeName: ecoassethub.jobs
-      RabbitMq__QueueName: ecoassethub.ingestion.jobs
-      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
+      RabbitMq__ExchangeName: timelens.jobs
+      RabbitMq__QueueName: timelens.ingestion.jobs
+      RabbitMq__ValidationQueueName: timelens.validation.jobs
       Scheduler__PollingSeconds: 10
       Scheduler__ExecutionApiBaseUrl: http://api:8080
     restart: unless-stopped
@@ -119,17 +121,17 @@ services:
   validation-worker:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.Validation.Worker/Dockerfile
+      dockerfile: src/TimeLens.Validation.Worker/Dockerfile
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
-      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-ecoassethub};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timelens};Username=${POSTGRES_USER:-timelens};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__ClickHouse: "Host=clickhouse;Port=8123;Protocol=http;Database=${CLICKHOUSE_DB:-timelens};Username=${CLICKHOUSE_USER:-default};Password=${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}"
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-timelens}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      RabbitMq__ExchangeName: ecoassethub.jobs
-      RabbitMq__ValidationQueueName: ecoassethub.validation.jobs
+      RabbitMq__ExchangeName: timelens.jobs
+      RabbitMq__ValidationQueueName: timelens.validation.jobs
     ports:
       - "5104:8080"
     restart: unless-stopped
@@ -144,21 +146,21 @@ services:
   ingestion:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.Ingestion/Dockerfile
+      dockerfile: src/TimeLens.Ingestion/Dockerfile
     environment:
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ecoassethub};Username=${POSTGRES_USER:-ecoasset};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-timelens};Username=${POSTGRES_USER:-timelens};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
       InsertApi__GrpcUrl: http://insert:8081
       InsertApi__TokenEndpoint: ${INSERT_API_TOKEN_ENDPOINT:-}
       InsertApi__ClientId: ${INSERT_API_CLIENT_ID:-}
       InsertApi__ClientSecret: ${INSERT_API_CLIENT_SECRET:-}
-      InsertApi__Scope: ${INSERT_API_SCOPE:-ecoassethub.insert.write}
+      InsertApi__Scope: ${INSERT_API_SCOPE:-timelens.insert.write}
       RabbitMq__HostName: rabbitmq
       RabbitMq__Port: 5672
-      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-ecoassethub}
+      RabbitMq__VirtualHost: ${RABBITMQ_VHOST:-timelens}
       RabbitMq__UserName: ${RABBITMQ_USER:-guest}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      RabbitMq__ExchangeName: ecoassethub.jobs
-      RabbitMq__QueueName: ecoassethub.ingestion.jobs
+      RabbitMq__ExchangeName: timelens.jobs
+      RabbitMq__QueueName: timelens.ingestion.jobs
       Ingestion__LookbackHours: 48
       Ingestion__BatchSize: 500
       Ingestion__MinRequestIntervalSeconds: 3
@@ -176,7 +178,7 @@ services:
   ui:
     build:
       context: .
-      dockerfile: src/EcoAssetHub.Client/Dockerfile
+      dockerfile: src/TimeLens.Client/Dockerfile
     ports:
       - "8080:80"
     restart: unless-stopped

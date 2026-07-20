@@ -1,18 +1,20 @@
-# EcoAssetHub
+# TimeLens
 
-EcoAssetHub is a renewable-energy data platform for collecting, storing, querying, and visualizing Energy Charts time-series data. It combines .NET services, PostgreSQL scheduling state, ClickHouse time-series persistence, RabbitMQ-based ingestion workers, and a React/Vite UI for dataset exploration and ingestion monitoring.
+TimeLens is an open-source Time Series Intelligence Platform for ingesting, validating, processing, and analyzing time series data from multiple providers. It combines .NET services, PostgreSQL scheduling state, ClickHouse time-series persistence, RabbitMQ-based workers, and a React/Vite UI for dataset exploration, ingestion monitoring, validation, and execution workflows.
 
 ## What It Does
 
-- Search Energy Charts curves and datasets by endpoint, metric, curve id, or identifier.
-- Inspect current or historical production and forecast time-series versions in charts and tables.
+- Search provider-backed curves and datasets by endpoint, metric, curve id, or identifier.
+- Inspect current or historical time-series versions in charts and tables.
 - Track each curve's ingestion schedules, queued jobs, executions, inserted rows, skipped rows, and failures.
 - Edit ingestion schedules, reset their default cron/window, and queue one-time backload jobs.
+- Validate data quality and record validation findings.
+- Run execution workflows over stored time-series data.
 - Run the full stack locally with Compose.
 
 ## Project Status
 
-EcoAssetHub currently covers data ingestion, versioned storage, an execution platform, and a validation engine. Planned work is tracked in [ROADMAP.md](ROADMAP.md), including the TimeLens rebrand, analytics, derived curves, multi-provider support, signals, forecasting, strategy execution, and backtesting.
+TimeLens currently covers data ingestion, versioned storage, an execution platform, and a validation engine. Planned work is tracked in [ROADMAP.md](ROADMAP.md), including analytics, derived curves, multi-provider support, signals, forecasting, strategy execution, and backtesting.
 
 ## Stack
 
@@ -31,7 +33,7 @@ EcoAssetHub currently covers data ingestion, versioned storage, an execution pla
 | `api` | Main HTTP API, dataset reads, historical time-series reads, and ingestion control | `5100` |
 | `insert` | Insert API plus gRPC ingestion endpoint | `5101`, `5103` |
 | `scheduler` | Queues ingestion jobs on schedule | internal |
-| `ingestion` | Consumes RabbitMQ jobs and loads Energy Charts data | internal |
+| `ingestion` | Consumes RabbitMQ jobs and loads provider data | internal |
 | `postgres` | Scheduling, jobs, executions, and assets | `5432` |
 | `clickhouse` | Ingested time-series data | `8123`, `9000` |
 | `rabbitmq` | RabbitMQ broker and management UI | `5672`, `15672` |
@@ -65,7 +67,7 @@ POST /api/ingestion/schedules/{scheduleId}/backloads
 
 Older global ingestion endpoints still exist for compatibility, but the UI uses the curve-scoped endpoints.
 
-Schedules and jobs carry a `Source`. The current implemented source is `energy-charts`; adding FTP, Selenium, or another source should add a source-specific ingestion implementation and route by that field, while keeping metadata in PostgreSQL and time-series values in ClickHouse.
+Schedules and jobs carry a `Source`. The current implemented provider is `energy-charts`; adding FTP, Selenium, or another source should add a source-specific ingestion implementation and route by that field, while keeping metadata in PostgreSQL and time-series values in ClickHouse.
 
 ## Run With Compose
 
@@ -101,15 +103,15 @@ Use `docker compose down` if you started it with Docker.
 Backend:
 
 ```bash
-dotnet restore EcoAssetHub.sln
-dotnet build EcoAssetHub.sln
-dotnet run --project src/EcoAssetHub.API/EcoAssetHub.API.csproj
+dotnet restore TimeLens.sln
+dotnet build TimeLens.sln
+dotnet run --project src/TimeLens.API/TimeLens.API.csproj
 ```
 
 Client:
 
 ```bash
-cd src/EcoAssetHub.Client
+cd src/TimeLens.Client
 npm install
 npm start
 ```
@@ -119,17 +121,17 @@ The client expects Node `>=24.18.0 <27` and npm `>=12 <13`. Set `VITE_API_BASE_U
 ## Tests
 
 ```bash
-dotnet test EcoAssetHub.sln
-cd src/EcoAssetHub.Client && npm test
+dotnet test TimeLens.sln
+cd src/TimeLens.Client && npm test
 ```
 
 ## License
 
-EcoAssetHub is licensed under the [MIT License](LICENSE).
+TimeLens is licensed under the [MIT License](LICENSE).
 
 ## Notes
 
-- Compose uses database name `ecoassethub` for PostgreSQL and ClickHouse.
+- Compose uses database name `timelens` for PostgreSQL and ClickHouse.
 - Copy `.env.example` to `.env` and set the passwords before running compose.
 - The UI container installs npm 12 in its Node 24 build image before running `npm ci`.
 - Existing dataset metadata created before curve scoping may need re-ingestion/upsert to populate `CurveId`.

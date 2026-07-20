@@ -1,0 +1,13 @@
+﻿using TimeLens.Domain.Models;
+
+namespace TimeLens.Domain.Interfaces;
+
+public interface IRenewableAssetRepository
+{
+    Task<List<RenewableAssetDto>> GetAllAsync();
+    Task<RenewableAsset?> GetByMeterPointIdAsync(long id);
+    Task<string> CreateAsync(RenewableAsset newObject, CancellationToken cancellationToken = default);
+    Task RemoveAsync(string id);
+    Task<RenewableAsset?> GetAsync(string id);
+    Task<List<CurveDto>> SearchCurvesAsync(string? search, CancellationToken cancellationToken = default);
+}
