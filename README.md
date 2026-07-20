@@ -10,6 +10,10 @@ EcoAssetHub is a renewable-energy data platform for collecting, storing, queryin
 - Edit ingestion schedules, reset their default cron/window, and queue one-time backload jobs.
 - Run the full stack locally with Compose.
 
+## Project Status
+
+EcoAssetHub currently covers data ingestion, versioned storage, an execution platform, and a validation engine. Planned work is tracked in [ROADMAP.md](ROADMAP.md), including the TimeLens rebrand, analytics, derived curves, multi-provider support, signals, forecasting, strategy execution, and backtesting.
+
 ## Stack
 
 - Backend: .NET 10
@@ -118,6 +122,10 @@ The client expects Node `>=24.18.0 <27` and npm `>=12 <13`. Set `VITE_API_BASE_U
 dotnet test EcoAssetHub.sln
 cd src/EcoAssetHub.Client && npm test
 ```
+
+## License
+
+EcoAssetHub is licensed under the [MIT License](LICENSE).
 
 ## Notes
 
