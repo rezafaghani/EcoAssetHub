@@ -196,21 +196,21 @@ public class QualityRepository(TimeLensContext context) : IQualityRepository
 
     public async Task<List<QualityValidationJobDto>> GetJobsAsync(CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{JobSelectSql} ORDER BY j.updated_at DESC");
+        await using var command = context.Postgres.CreateCommand(BuildJobSelectSql());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await ReadJobs(reader, cancellationToken);
     }
 
     public async Task<List<QualityValidationJobDto>> GetEnabledJobsAsync(CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{JobSelectSql} WHERE j.enabled = true ORDER BY j.updated_at DESC");
+        await using var command = context.Postgres.CreateCommand(BuildJobSelectSql("j.enabled = true"));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await ReadJobs(reader, cancellationToken);
     }
 
     public async Task<QualityValidationJobDto?> GetJobAsync(string id, CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{JobSelectSql} WHERE j.id = @id");
+        await using var command = context.Postgres.CreateCommand(BuildJobSelectSql("j.id = @id", orderBy: false));
         command.Parameters.AddWithValue("id", id);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -594,7 +594,13 @@ public class QualityRepository(TimeLensContext context) : IQualityRepository
         FROM quality_validation_jobs j
         LEFT JOIN quality_validation_job_targets t ON t.job_id = j.id
         LEFT JOIN quality_validation_job_checks c ON c.job_id = j.id
+        """;
+
+    private static string BuildJobSelectSql(string? where = null, bool orderBy = true) => $"""
+        {JobSelectSql}
+        {(string.IsNullOrWhiteSpace(where) ? "" : $"WHERE {where}")}
         GROUP BY j.id
+        {(orderBy ? "ORDER BY j.updated_at DESC" : "")}
         """;
 
     private static async Task<List<QualityValidationJobDto>> ReadJobs(NpgsqlDataReader reader, CancellationToken cancellationToken)
@@ -614,11 +620,11 @@ public class QualityRepository(TimeLensContext context) : IQualityRepository
                 reader.GetInt32(8),
                 reader.GetInt32(9),
                 Json(reader.GetString(10)),
-                JsonSerializer.Deserialize<List<QualityValidationJobTargetDto>>(reader.GetString(13), JsonOptions) ?? [],
-                JsonSerializer.Deserialize<List<QualityValidationJobCheckDto>>(reader.GetString(14), JsonOptions) ?? [],
+                JsonSerializer.Deserialize<List<QualityValidationJobTargetDto>>(reader.GetString(14), JsonOptions) ?? [],
+                JsonSerializer.Deserialize<List<QualityValidationJobCheckDto>>(reader.GetString(15), JsonOptions) ?? [],
                 reader.GetFieldValue<DateTimeOffset>(11),
                 reader.GetFieldValue<DateTimeOffset>(12),
-                reader.IsDBNull(15) ? null : reader.GetFieldValue<DateTimeOffset>(15)));
+                reader.IsDBNull(13) ? null : reader.GetFieldValue<DateTimeOffset>(13)));
         }
 
         return jobs;
