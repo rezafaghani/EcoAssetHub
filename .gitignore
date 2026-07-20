@@ -357,5 +357,5 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 /tests/Audio.AutoDesign.IntegrationTests/personal.docker-compose.yml
-.vs/EcoAssetHub/v17/.suo
+.vs/TimeLens/v17/.suo
 *.v2

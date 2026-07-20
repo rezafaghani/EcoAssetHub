@@ -6,10 +6,10 @@
 - [x] Versioned Storage
 - [x] Execution Platform
 - [x] Validation Engine
+- [x] TimeLens Rebrand
 
 ## Planned
 
-- [ ] TimeLens Rebrand
 - [ ] Analytics Engine
 - [ ] Derived Curves
 - [ ] Multi-Provider Support
