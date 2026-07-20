@@ -11,21 +11,21 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
 
     public async Task<List<ExecutionDefinitionDto>> GetDefinitionsAsync(CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{DefinitionSelectSql} ORDER BY d.updated_at DESC");
+        await using var command = context.Postgres.CreateCommand(BuildDefinitionSelectSql());
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await ReadDefinitions(reader, cancellationToken);
     }
 
     public async Task<List<ExecutionDefinitionDto>> GetEnabledDefinitionsAsync(CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{DefinitionSelectSql} WHERE d.enabled = true ORDER BY d.updated_at DESC");
+        await using var command = context.Postgres.CreateCommand(BuildDefinitionSelectSql("d.enabled = true"));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await ReadDefinitions(reader, cancellationToken);
     }
 
     public async Task<ExecutionDefinitionDto?> GetDefinitionAsync(string id, CancellationToken cancellationToken = default)
     {
-        await using var command = context.Postgres.CreateCommand($"{DefinitionSelectSql} WHERE d.id = @id");
+        await using var command = context.Postgres.CreateCommand(BuildDefinitionSelectSql("d.id = @id", orderBy: false));
         command.Parameters.AddWithValue("id", id);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return (await ReadDefinitions(reader, cancellationToken)).SingleOrDefault();
@@ -261,7 +261,13 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
         FROM execution_definitions d
         LEFT JOIN execution_definition_targets t ON t.definition_id = d.id
         LEFT JOIN execution_definition_plugins p ON p.definition_id = d.id
+        """;
+
+    private static string BuildDefinitionSelectSql(string? where = null, bool orderBy = true) => $"""
+        {DefinitionSelectSql}
+        {(string.IsNullOrWhiteSpace(where) ? "" : $"WHERE {where}")}
         GROUP BY d.id
+        {(orderBy ? "ORDER BY d.updated_at DESC" : "")}
         """;
 
     private static async Task<List<ExecutionDefinitionDto>> ReadDefinitions(NpgsqlDataReader reader, CancellationToken cancellationToken)
