@@ -34,8 +34,8 @@ public record ExecutionDefinitionDto(
     bool Enabled,
     string CronExpression,
     string TimeZone,
-    string WindowStartExpression,
-    string WindowEndExpression,
+    string? WindowStartExpression,
+    string? WindowEndExpression,
     int MaxParallelism,
     int TimeoutSeconds,
     JsonElement Tags,
@@ -66,8 +66,8 @@ public record UpsertExecutionDefinitionRequest(
     bool Enabled,
     string CronExpression,
     string TimeZone,
-    string WindowStartExpression,
-    string WindowEndExpression,
+    string? WindowStartExpression,
+    string? WindowEndExpression,
     int? MaxParallelism,
     int? TimeoutSeconds,
     JsonElement? Tags,
@@ -89,6 +89,15 @@ public record UpsertExecutionDefinitionPluginRequest(
     int? SortOrder);
 
 public record RunExecutionDefinitionRequest(string? Start, string? End, string? TriggerType = null);
+
+public static class ExecutionRunStatuses
+{
+    public const string Passed = "passed";
+    public const string Warning = "warning";
+    public const string Failed = "failed";
+    public const string ProviderMissingData = "provider_missing_data";
+    public const string ExecutionError = "execution_error";
+}
 
 public record ExecutionRunDto(
     string Id,

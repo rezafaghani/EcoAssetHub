@@ -67,8 +67,8 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
             command.Parameters.AddWithValue("enabled", request.Enabled);
             command.Parameters.AddWithValue("cron_expression", request.CronExpression.Trim());
             command.Parameters.AddWithValue("time_zone", string.IsNullOrWhiteSpace(request.TimeZone) ? "UTC" : request.TimeZone.Trim());
-            command.Parameters.AddWithValue("window_start_expression", request.WindowStartExpression.Trim());
-            command.Parameters.AddWithValue("window_end_expression", request.WindowEndExpression.Trim());
+            command.Parameters.AddWithValue("window_start_expression", request.WindowStartExpression?.Trim() ?? "now-24h");
+            command.Parameters.AddWithValue("window_end_expression", request.WindowEndExpression?.Trim() ?? "now");
             command.Parameters.AddWithValue("max_parallelism", Math.Clamp(request.MaxParallelism ?? 4, 1, 32));
             command.Parameters.AddWithValue("timeout_seconds", Math.Clamp(request.TimeoutSeconds ?? 300, 30, 3600));
             AddJson(command, "tags", request.Tags);
@@ -115,7 +115,13 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
     {
         var now = DateTimeOffset.UtcNow;
         var runId = $"execution-run-{Guid.NewGuid():N}";
-        var status = results.Any(x => x.Status == QualityStatuses.Critical) ? QualityStatuses.Critical : results.Count == 0 ? QualityStatuses.Healthy : QualityStatuses.Degraded;
+        var status = results.Any(x => x.Status == ExecutionRunStatuses.ProviderMissingData)
+            ? ExecutionRunStatuses.ProviderMissingData
+            : results.Any(x => x.Status == QualityStatuses.Critical)
+                ? ExecutionRunStatuses.Failed
+                : results.Count == 0
+                    ? ExecutionRunStatuses.Passed
+                    : ExecutionRunStatuses.Warning;
         await using var connection = await context.Postgres.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
@@ -140,7 +146,7 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
             command.Parameters.AddWithValue("target_count", results.Select(x => x.TargetId).Distinct().Count());
             command.Parameters.AddWithValue("completed_count", results.Select(x => x.TargetId).Distinct().Count());
             command.Parameters.AddWithValue("finding_count", results.Count);
-            command.Parameters.AddWithValue("critical_count", results.Count(x => x.Status == QualityStatuses.Critical));
+            command.Parameters.AddWithValue("critical_count", results.Count(x => x.Status == QualityStatuses.Critical || x.Status == ExecutionRunStatuses.Failed));
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -168,7 +174,32 @@ public class ExecutionRepository(TimeLensContext context) : IExecutionRepository
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return new ExecutionRunDto(runId, definitionId, triggerType, status, now, now, now, start, end, results.Select(x => x.TargetId).Distinct().Count(), results.Select(x => x.TargetId).Distinct().Count(), results.Count, results.Count(x => x.Status == QualityStatuses.Critical), string.Empty);
+        return new ExecutionRunDto(runId, definitionId, triggerType, status, now, now, now, start, end, results.Select(x => x.TargetId).Distinct().Count(), results.Select(x => x.TargetId).Distinct().Count(), results.Count, results.Count(x => x.Status == QualityStatuses.Critical || x.Status == ExecutionRunStatuses.Failed), string.Empty);
+    }
+
+    public async Task<ExecutionRunDto> SaveFailedRunAsync(string definitionId, string triggerType, DateTimeOffset? start, DateTimeOffset? end, string error, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var runId = $"execution-run-{Guid.NewGuid():N}";
+        await using var command = context.Postgres.CreateCommand("""
+            INSERT INTO execution_runs (
+                id, definition_id, trigger_type, status, queued_at, started_at, finished_at,
+                evaluated_start, evaluated_end, target_count, completed_count, finding_count, critical_count, error)
+            VALUES (
+                @id, @definition_id, @trigger_type, @status, @now, @now, @now,
+                @evaluated_start, @evaluated_end, 0, 0, 0, 1, @error)
+            """);
+        command.Parameters.AddWithValue("id", runId);
+        command.Parameters.AddWithValue("definition_id", definitionId);
+        command.Parameters.AddWithValue("trigger_type", triggerType);
+        command.Parameters.AddWithValue("status", ExecutionRunStatuses.ExecutionError);
+        command.Parameters.AddWithValue("now", now);
+        command.Parameters.AddWithValue("evaluated_start", start.HasValue ? start.Value : DBNull.Value);
+        command.Parameters.AddWithValue("evaluated_end", end.HasValue ? end.Value : DBNull.Value);
+        command.Parameters.AddWithValue("error", error);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return new ExecutionRunDto(runId, definitionId, triggerType, ExecutionRunStatuses.ExecutionError, now, now, now, start, end, 0, 0, 0, 1, error);
     }
 
     public async Task<List<ExecutionRunDto>> GetRunsAsync(string? definitionId, CancellationToken cancellationToken = default)

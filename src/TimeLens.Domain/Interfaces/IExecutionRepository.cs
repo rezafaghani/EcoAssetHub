@@ -11,5 +11,6 @@ public interface IExecutionRepository
     Task<ExecutionDefinitionDto?> SetDefinitionEnabledAsync(string id, bool enabled, CancellationToken cancellationToken = default);
     Task MarkDefinitionQueuedAsync(string id, DateTimeOffset queuedAt, CancellationToken cancellationToken = default);
     Task<ExecutionRunDto> SaveRunAsync(string definitionId, string triggerType, DateTimeOffset start, DateTimeOffset end, List<ExecutionStepResultDto> results, CancellationToken cancellationToken = default);
+    Task<ExecutionRunDto> SaveFailedRunAsync(string definitionId, string triggerType, DateTimeOffset? start, DateTimeOffset? end, string error, CancellationToken cancellationToken = default);
     Task<List<ExecutionRunDto>> GetRunsAsync(string? definitionId, CancellationToken cancellationToken = default);
 }
