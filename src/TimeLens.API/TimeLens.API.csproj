@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TimeLens.Domain\TimeLens.Domain.csproj" />
     <ProjectReference Include="..\TimeLens.Infrastructure\TimeLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\TimeLens.Validation\TimeLens.Validation.csproj" />
   </ItemGroup>
 
 </Project>

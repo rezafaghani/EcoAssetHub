@@ -64,6 +64,18 @@ public static class ExecutionPluginConfiguration
 
     public static bool TryParseDuration(string? value, out TimeSpan duration)
     {
+        duration = value?.Trim().ToLowerInvariant() switch
+        {
+            "quarter-hour" or "quarterhour" or "15min" or "15m" => TimeSpan.FromMinutes(15),
+            "hour" or "hourly" or "1h" => TimeSpan.FromHours(1),
+            "day" or "daily" or "1d" => TimeSpan.FromDays(1),
+            _ => default
+        };
+        if (duration > TimeSpan.Zero)
+        {
+            return true;
+        }
+
         try
         {
             duration = string.IsNullOrWhiteSpace(value) ? default : XmlConvert.ToTimeSpan(value);

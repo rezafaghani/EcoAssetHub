@@ -55,21 +55,43 @@ public class ExecutionController(
     {
         if (string.IsNullOrWhiteSpace(request.Name)
             || string.IsNullOrWhiteSpace(request.CronExpression)
-            || string.IsNullOrWhiteSpace(request.WindowStartExpression)
-            || string.IsNullOrWhiteSpace(request.WindowEndExpression)
             || request.Targets.Count == 0
             || request.Plugins.Count == 0)
         {
-            return BadRequest("An execution definition requires a name, schedule, evaluation window, target, and plugin.");
+            return BadRequest("An execution definition requires a name, schedule, target, and plugin.");
         }
 
-        var pluginIds = pluginRegistry.List().Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var availablePlugins = pluginRegistry.List();
+        var pluginIds = availablePlugins.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (request.Plugins.Any(x => !pluginIds.Contains(x.PluginId)))
         {
             return BadRequest("One or more plugins are not available in this environment.");
         }
 
-        return Ok(await executionRepository.UpsertDefinitionAsync(request, cancellationToken));
+        var isValidation = request.Plugins.All(plugin =>
+            availablePlugins.Any(available => available.Id.Equals(plugin.PluginId, StringComparison.OrdinalIgnoreCase)
+                && available.Category.Equals(ExecutionCategories.Validation, StringComparison.OrdinalIgnoreCase)));
+        var windowStart = string.IsNullOrWhiteSpace(request.WindowStartExpression)
+            ? (isValidation ? "now-24h" : null)
+            : request.WindowStartExpression.Trim();
+        var windowEnd = string.IsNullOrWhiteSpace(request.WindowEndExpression)
+            ? (isValidation ? "now" : null)
+            : request.WindowEndExpression.Trim();
+
+        if (string.IsNullOrWhiteSpace(windowStart)
+            || string.IsNullOrWhiteSpace(windowEnd)
+            || !DateTimeExpression.TryResolve(windowStart, out _)
+            || !DateTimeExpression.TryResolve(windowEnd, out _))
+        {
+            return BadRequest("A valid automatic execution window is required.");
+        }
+
+        var normalized = request with
+        {
+            WindowStartExpression = windowStart,
+            WindowEndExpression = windowEnd
+        };
+        return Ok(await executionRepository.UpsertDefinitionAsync(normalized, cancellationToken));
     }
 
     [HttpPatch("api/execution-definitions/{id}/enabled")]
@@ -93,28 +115,41 @@ public class ExecutionController(
             return NotFound();
         }
 
-        if (!DateTimeExpression.TryResolve(request.Start ?? definition.WindowStartExpression, out var start, definition.TimeZone)
-            || !DateTimeExpression.TryResolve(request.End ?? definition.WindowEndExpression, out var end, definition.TimeZone)
-            || start >= end)
+        var trigger = string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType;
+        DateTimeOffset? start = null;
+        DateTimeOffset? end = null;
+        if (!DateTimeExpression.TryResolve(request.Start ?? definition.WindowStartExpression ?? "now-24h", out var resolvedStart, definition.TimeZone)
+            || !DateTimeExpression.TryResolve(request.End ?? definition.WindowEndExpression ?? "now", out var resolvedEnd, definition.TimeZone)
+            || resolvedStart >= resolvedEnd)
         {
             return BadRequest("A valid half-open evaluation window is required.");
         }
 
+        start = resolvedStart;
+        end = resolvedEnd;
+
         try
         {
-            var results = await executionRuntime.ExecuteAsync(definition, start, end, cancellationToken);
+            var results = await executionRuntime.ExecuteAsync(definition, resolvedStart, resolvedEnd, cancellationToken);
             var run = await executionRepository.SaveRunAsync(
                 definition.Id,
-                string.IsNullOrWhiteSpace(request.TriggerType) ? "manual" : request.TriggerType,
-                start,
-                end,
+                trigger,
+                resolvedStart,
+                resolvedEnd,
                 results,
                 cancellationToken);
             return Ok(new RunExecutionDefinitionResult(run, results));
         }
-        catch (ArgumentException exception)
+        catch (Exception exception)
         {
-            return BadRequest(exception.Message);
+            var run = await executionRepository.SaveFailedRunAsync(
+                definition.Id,
+                trigger,
+                start,
+                end,
+                exception.Message,
+                cancellationToken);
+            return Ok(new RunExecutionDefinitionResult(run, []));
         }
     }
 

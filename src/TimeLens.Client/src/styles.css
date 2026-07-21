@@ -487,7 +487,7 @@ svg text {
 
 .quality-config-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(96px, auto) minmax(104px, auto);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-2);
   align-items: end;
 }
@@ -591,6 +591,10 @@ svg text {
   margin-left: var(--space-1);
 }
 
+.button-row {
+  min-width: 250px;
+}
+
 .icon-button {
   width: 2rem;
   font-size: 1.1rem;
@@ -617,7 +621,8 @@ svg text {
 
 .status-badge.completed,
 .status-badge.enabled,
-.status-badge.healthy {
+.status-badge.healthy,
+.status-badge.passed {
   background: #dcfae6;
   color: #067647;
 }
@@ -644,13 +649,15 @@ svg text {
 
 .status-badge.failed,
 .status-badge.critical,
+.status-badge.execution_error,
 .status-badge.disabled {
   background: #fee4e2;
   color: var(--danger);
 }
 
 .status-badge.degraded,
-.status-badge.warning {
+.status-badge.warning,
+.status-badge.provider_missing_data {
   background: #fef0c7;
   color: #b54708;
 }

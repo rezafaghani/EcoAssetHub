@@ -56,7 +56,7 @@ public class ExecutionRuntime(
 
         var metadata = await datasetRepository.GetAsync(target.TargetId, cancellationToken)
             ?? throw new ArgumentException($"Dataset '{target.TargetId}' was not found.");
-        var points = await timeSeriesRepository.GetSeriesAsync(target.TargetId, start, end, null, cancellationToken, 10000);
+        var points = await timeSeriesRepository.GetSeriesAsync(target.TargetId, start, end, null, cancellationToken);
         return new ExecutionPluginContext(target.TargetType, target.TargetId, start, end, EmptyJson(), metadata, points);
     }
 

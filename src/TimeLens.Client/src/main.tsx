@@ -79,6 +79,7 @@ interface QualitySummary {
 
 interface QualityValidatorType {
   id: string;
+  name?: string;
   displayName: string;
   description: string;
   category: string;
@@ -91,15 +92,40 @@ interface QualityGroup {
   enabled: boolean;
 }
 
-interface QualityJob {
+interface ExecutionDefinition {
   id: string;
   name: string;
+  description: string;
   enabled: boolean;
   cronExpression: string;
+  timeZone: string;
   windowStartExpression: string;
   windowEndExpression: string;
-  targets: { targetType: string; targetId: string }[];
-  checks: { validatorId: string; enabled: boolean }[];
+  maxParallelism: number;
+  timeoutSeconds: number;
+  tags: Record<string, unknown>;
+  targets: { targetType: string; targetId: string; rule?: Record<string, unknown> }[];
+  plugins: { id: string; pluginId: string; pluginVersion: number; enabled: boolean; configuration: Record<string, unknown>; severity: Record<string, unknown>; sortOrder: number }[];
+  createdAt: string;
+  updatedAt: string;
+  lastQueuedAt: string | null;
+}
+
+interface ExecutionRun {
+  id: string;
+  definitionId: string;
+  triggerType: string;
+  status: string;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  evaluatedStart: string | null;
+  evaluatedEnd: string | null;
+  targetCount: number;
+  completedCount: number;
+  findingCount: number;
+  criticalCount: number;
+  error: string;
 }
 
 const chartBounds = {
@@ -141,7 +167,8 @@ function App() {
   const [qualitySummary, setQualitySummary] = useState<QualitySummary | null>(null);
   const [qualityValidators, setQualityValidators] = useState<QualityValidatorType[]>([]);
   const [qualityGroups, setQualityGroups] = useState<QualityGroup[]>([]);
-  const [qualityJobs, setQualityJobs] = useState<QualityJob[]>([]);
+  const [qualityJobs, setQualityJobs] = useState<ExecutionDefinition[]>([]);
+  const [validationRuns, setValidationRuns] = useState<ExecutionRun[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<ChartPoint | null>(null);
 
   useEffect(() => {
@@ -275,20 +302,24 @@ function App() {
   async function loadQualityAdmin(silent = false) {
     if (!silent) setError('');
     try {
-      const [summaryResponse, validatorsResponse, groupsResponse, jobsResponse] = await Promise.all([
+      const [summaryResponse, validatorsResponse, groupsResponse, definitionsResponse, runsResponse] = await Promise.all([
         fetch(`${apiBase}/data-quality/summary`),
-        fetch(`${apiBase}/data-quality/validation-types`),
+        fetch(`${apiBase}/plugins?category=validation`),
         fetch(`${apiBase}/data-quality/groups`),
-        fetch(`${apiBase}/data-quality/jobs`)
+        fetch(`${apiBase}/execution-definitions`),
+        fetch(`${apiBase}/executions`)
       ]);
-      if (!summaryResponse.ok || !validatorsResponse.ok || !groupsResponse.ok || !jobsResponse.ok) {
+      if (!summaryResponse.ok || !validatorsResponse.ok || !groupsResponse.ok || !definitionsResponse.ok || !runsResponse.ok) {
         throw new Error('Quality admin request failed');
       }
 
       setQualitySummary(await summaryResponse.json() as QualitySummary);
-      setQualityValidators(await validatorsResponse.json() as QualityValidatorType[]);
+      const plugins = await validatorsResponse.json() as QualityValidatorType[];
+      setQualityValidators(plugins.map(plugin => ({ ...plugin, displayName: plugin.displayName ?? plugin.name ?? plugin.id })));
       setQualityGroups(await groupsResponse.json() as QualityGroup[]);
-      setQualityJobs(await jobsResponse.json() as QualityJob[]);
+      const definitions = await definitionsResponse.json() as ExecutionDefinition[];
+      setQualityJobs(definitions.filter(definition => definition.plugins.some(plugin => plugin.pluginId.startsWith('timelens.validation.'))));
+      setValidationRuns(await runsResponse.json() as ExecutionRun[]);
     } catch {
       if (!silent) setError('Unable to load data quality configuration.');
     }
@@ -328,25 +359,23 @@ function App() {
     await loadQualityAdmin(true);
   }
 
-  async function createQualityJobForSelected(pluginId: string) {
+  async function createQualityJobForSelected(pluginId: string, name?: string, cronExpression?: string, enabled = true) {
     if (!selected) return;
     setError('');
-    const response = await fetch(`${apiBase}/data-quality/jobs`, {
+    const response = await fetch(`${apiBase}/execution-definitions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: `${selected.source} ${selected.category} ${pluginId}`,
+        name: name?.trim() || `${selected.source} ${selected.category} ${pluginId.replace('timelens.validation.', '')}`,
         description: `Validation schedule for ${selected.id}`,
-        enabled: true,
-        cronExpression: suggestCronFromGranularity(selected.granularity) || '*/30 * * * *',
+        enabled,
+        cronExpression: cronExpression?.trim() || suggestCronFromGranularity(selected.granularity) || '*/30 * * * *',
         timeZone,
-        windowStartExpression: 'now-24h',
-        windowEndExpression: 'now',
         maxParallelism: 4,
         timeoutSeconds: 300,
         tags: {},
         targets: [{ targetType: 'dataset', targetId: selected.id, rule: {} }],
-        checks: [{ validatorId: pluginId, enabled: true, configuration: {}, severity: {} }]
+        plugins: [{ pluginId, enabled: true, configuration: {}, severity: {} }]
       })
     });
     if (!response.ok) {
@@ -357,12 +386,42 @@ function App() {
     await loadQualityAdmin(true);
   }
 
-  async function runQualityJob(jobId: string) {
+  async function saveValidationDefinition(definition: ExecutionDefinition) {
     setError('');
-    const response = await fetch(`${apiBase}/data-quality/jobs/${encodeURIComponent(jobId)}/runs`, {
+    const response = await fetch(`${apiBase}/execution-definitions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify(definition)
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to save validation.');
+      return false;
+    }
+    await loadQualityAdmin(true);
+    return true;
+  }
+
+  async function setValidationEnabled(definitionId: string, enabled: boolean) {
+    setError('');
+    const response = await fetch(`${apiBase}/execution-definitions/${encodeURIComponent(definitionId)}/enabled`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    if (!response.ok) {
+      setError(await response.text() || 'Unable to update validation state.');
+      return false;
+    }
+    await loadQualityAdmin(true);
+    return true;
+  }
+
+  async function runQualityJob(jobId: string, startExpression: string, endExpression: string, triggerType: string) {
+    setError('');
+    const response = await fetch(`${apiBase}/execution-definitions/${encodeURIComponent(jobId)}/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: startExpression, end: endExpression, triggerType })
     });
     if (!response.ok) {
       setError(await response.text() || 'Unable to run quality job.');
@@ -635,8 +694,11 @@ function App() {
           validators={qualityValidators}
           groups={qualityGroups}
           jobs={qualityJobs}
+          runs={validationRuns}
           onCreateGroup={createQualityGroupForSelected}
           onCreateJob={createQualityJobForSelected}
+          onSaveJob={saveValidationDefinition}
+          onSetEnabled={setValidationEnabled}
           onRunJob={runQualityJob}
         />
 
@@ -779,29 +841,52 @@ function QualityAdminPanel({
   validators,
   groups,
   jobs,
+  runs,
   onCreateGroup,
   onCreateJob,
+  onSaveJob,
+  onSetEnabled,
   onRunJob
 }: {
   selected: DatasetMetadata | null;
   summary: QualitySummary | null;
   validators: QualityValidatorType[];
   groups: QualityGroup[];
-  jobs: QualityJob[];
+  jobs: ExecutionDefinition[];
+  runs: ExecutionRun[];
   onCreateGroup: () => Promise<void>;
-  onCreateJob: (pluginId: string) => Promise<void>;
-  onRunJob: (jobId: string) => Promise<void>;
+  onCreateJob: (pluginId: string, name?: string, cronExpression?: string, enabled?: boolean) => Promise<void>;
+  onSaveJob: (job: ExecutionDefinition) => Promise<boolean>;
+  onSetEnabled: (jobId: string, enabled: boolean) => Promise<boolean>;
+  onRunJob: (jobId: string, startExpression: string, endExpression: string, triggerType: string) => Promise<void>;
 }) {
-  const [validatorId, setValidatorId] = useState('completeness.missing-timestamps');
+  const [validatorId, setValidatorId] = useState('timelens.validation.completeness.missing-timestamps');
+  const [name, setName] = useState('');
+  const [cronExpression, setCronExpression] = useState(selected ? suggestCronFromGranularity(selected.granularity) || '*/30 * * * *' : '*/30 * * * *');
+  const [enabled, setEnabled] = useState(true);
+  const [runStart, setRunStart] = useState('now-24h');
+  const [runEnd, setRunEnd] = useState('now');
+  const [editingId, setEditingId] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editPluginId, setEditPluginId] = useState('');
+  const [editCronExpression, setEditCronExpression] = useState('');
+  const [editConfiguration, setEditConfiguration] = useState('{}');
   const selectedJobs = selected
     ? jobs.filter(job => job.targets.some(target => target.targetId === selected.id))
     : [];
+  const latestRunByDefinition = latestBy(runs, run => run.definitionId, run => run.queuedAt);
+  const history = runs.filter(run => selectedJobs.some(job => job.id === run.definitionId));
 
   useEffect(() => {
     if (validators.length && !validators.some(validator => validator.id === validatorId)) {
       setValidatorId(validators[0].id);
     }
   }, [validators, validatorId]);
+
+  useEffect(() => {
+    setName(selected ? `${selected.source} ${selected.category} validation` : '');
+    setCronExpression(selected ? suggestCronFromGranularity(selected.granularity) || '*/30 * * * *' : '*/30 * * * *');
+  }, [selected]);
 
   return (
     <section className="quality-panel">
@@ -822,34 +907,117 @@ function QualityAdminPanel({
 
       <div className="quality-config-row">
         <label>
-          <span>Check</span>
+          <span>Validation name</span>
+          <input value={name} onChange={event => setName(event.target.value)} placeholder="Validation name" />
+        </label>
+        <label>
+          <span>Plugin</span>
           <select value={validatorId} onChange={event => setValidatorId(event.target.value)}>
             {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.displayName}</option>)}
           </select>
         </label>
-        <button type="button" disabled={!selected || validators.length === 0} onClick={() => void onCreateJob(validatorId)}>Add schedule</button>
+        <label>
+          <span>Schedule</span>
+          <input value={cronExpression} onChange={event => setCronExpression(event.target.value)} placeholder="*/30 * * * *" />
+        </label>
+        <label className="live-toggle">
+          <input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />
+          Enabled
+        </label>
+        <button type="button" disabled={!selected || validators.length === 0} onClick={() => void onCreateJob(validatorId, name, cronExpression, enabled)}>Create validation</button>
         <button type="button" className="secondary" disabled={!selected} onClick={() => void onCreateGroup()}>Add group</button>
+      </div>
+
+      <div className="quality-config-row">
+        <DateExpressionInput label="Manual start" value={runStart} onChange={setRunStart} placeholder="last week, now-7d, or ISO" />
+        <DateExpressionInput label="Manual end" value={runEnd} onChange={setRunEnd} placeholder="now or ISO" />
+        <span className="muted">Date ranges are used only for manual and backfill runs.</span>
       </div>
 
       <div className="table-scroll compact">
         <table>
-          <thead><tr><th>Schedule</th><th>Checks</th><th>Window</th><th></th></tr></thead>
+          <thead><tr><th>Validation</th><th>Plugin</th><th>Schedule</th><th>Status</th><th>Last run</th><th>Findings</th><th></th></tr></thead>
           <tbody>
             {selectedJobs.slice(0, 8).map(job => (
               <tr key={job.id}>
                 <td>
-                  <strong>{job.name}</strong>
+                  {editingId === job.id ? (
+                    <input value={editName} onChange={event => setEditName(event.target.value)} />
+                  ) : <strong>{job.name}</strong>}
                   <small>{job.id}</small>
                 </td>
-                <td>{job.checks.filter(check => check.enabled).map(check => check.validatorId).join(', ')}</td>
-                <td>{job.windowStartExpression} - {job.windowEndExpression}</td>
-                <td><button type="button" className="table-action" onClick={() => void onRunJob(job.id)}>Run</button></td>
+                <td>{editingId === job.id ? (
+                  <>
+                    <select value={editPluginId} onChange={event => setEditPluginId(event.target.value)}>
+                      {validators.map(validator => <option key={validator.id} value={validator.id}>{validator.displayName}</option>)}
+                    </select>
+                    <input value={editConfiguration} onChange={event => setEditConfiguration(event.target.value)} placeholder="Plugin parameters JSON" />
+                  </>
+                ) : job.plugins.filter(plugin => plugin.enabled).map(plugin => plugin.pluginId.replace('timelens.validation.', '')).join(', ')}</td>
+                <td>{editingId === job.id ? <input value={editCronExpression} onChange={event => setEditCronExpression(event.target.value)} /> : job.cronExpression}<small>{job.lastQueuedAt ? `Queued ${formatDate(job.lastQueuedAt, job.timeZone)}` : 'Next scheduled by cron'}</small></td>
+                <td><StatusBadge status={job.enabled ? 'enabled' : 'disabled'} /></td>
+                <td>{latestRunByDefinition.get(job.id) ? <StatusBadge status={latestRunByDefinition.get(job.id)!.status} /> : <span className="muted">No runs</span>}<small>{latestRunByDefinition.get(job.id)?.triggerType ?? ''}</small></td>
+                <td>{latestRunByDefinition.get(job.id)?.findingCount.toLocaleString() ?? ''}</td>
+                <td className="button-row">
+                  {editingId === job.id ? (
+                    <button type="button" className="table-action" onClick={() => {
+                      let configuration: Record<string, unknown>;
+                      try {
+                        configuration = JSON.parse(editConfiguration) as Record<string, unknown>;
+                      } catch {
+                        configuration = {};
+                      }
+                      void onSaveJob({
+                        ...job,
+                        name: editName,
+                        cronExpression: editCronExpression,
+                        plugins: job.plugins.map((plugin, index) => index === 0 ? { ...plugin, pluginId: editPluginId, configuration } : plugin),
+                        targets: selected ? [{ targetType: 'dataset', targetId: selected.id, rule: {} }] : job.targets
+                      }).then(saved => saved && setEditingId(''));
+                    }}>Save</button>
+                  ) : (
+                    <button type="button" className="table-action" onClick={() => {
+                      setEditingId(job.id);
+                      setEditName(job.name);
+                      setEditPluginId(job.plugins[0]?.pluginId ?? validators[0]?.id ?? '');
+                      setEditCronExpression(job.cronExpression);
+                      setEditConfiguration(JSON.stringify(job.plugins[0]?.configuration ?? {}));
+                    }}>Edit</button>
+                  )}
+                  <button type="button" className="table-action" onClick={() => void onSetEnabled(job.id, !job.enabled)}>{job.enabled ? 'Disable' : 'Enable'}</button>
+                  <button type="button" className="table-action" onClick={() => void onRunJob(job.id, runStart, runEnd, 'manual')}>Run</button>
+                  <button type="button" className="table-action" onClick={() => void onRunJob(job.id, runStart, runEnd, 'backfill')}>Backfill</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {selected && selectedJobs.length === 0 && <p className="empty-state">No validation schedules target this dataset yet.</p>}
         {!selected && <p className="empty-state">Select a dataset to configure validation schedules.</p>}
+      </div>
+
+      <div className="table-scroll compact">
+        <table>
+          <thead><tr><th>Execution time</th><th>Status</th><th>Plugin</th><th>Duration</th><th>Target</th><th>Summary</th><th>Triggered by</th><th>Errors</th></tr></thead>
+          <tbody>
+            {history.slice(0, 12).map(run => {
+              const definition = jobs.find(job => job.id === run.definitionId);
+              return (
+                <tr key={run.id}>
+                  <td>{formatDate(run.queuedAt, definition?.timeZone ?? 'UTC')}</td>
+                  <td><StatusBadge status={run.status} /></td>
+                  <td>{definition?.plugins.map(plugin => plugin.pluginId.replace('timelens.validation.', '')).join(', ') ?? run.definitionId}</td>
+                  <td>{formatDuration(run.startedAt, run.finishedAt)}</td>
+                  <td>{definition?.targets.map(target => target.targetId).join(', ') ?? ''}</td>
+                  <td>{run.findingCount.toLocaleString()} findings · {run.criticalCount.toLocaleString()} critical</td>
+                  <td>{run.triggerType}</td>
+                  <td>{run.error}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {selected && history.length === 0 && <p className="empty-state">No validation history for this dataset yet.</p>}
       </div>
     </section>
   );
@@ -1389,6 +1557,18 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
 
+function latestBy<T>(items: T[], key: (item: T) => string, date: (item: T) => string) {
+  const result = new Map<string, T>();
+  for (const item of items) {
+    const itemKey = key(item);
+    const previous = result.get(itemKey);
+    if (!previous || new Date(date(item)).getTime() > new Date(date(previous)).getTime()) {
+      result.set(itemKey, item);
+    }
+  }
+  return result;
+}
+
 function isSeedPlaceholder(dataset: DatasetMetadata) {
   return dataset.metric === dataset.endpoint
     && !dataset.productionType
@@ -1405,6 +1585,14 @@ function formatRange(start: string | null, end: string | null, timeZone: string)
   if (!start && !end) return '';
   if (!end) return formatDate(start ?? '', timeZone);
   return `${formatDate(start ?? '', timeZone)} - ${formatDate(end, timeZone)}`;
+}
+
+function formatDuration(start: string | null, end: string | null) {
+  if (!start || !end) return '';
+  const milliseconds = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return '';
+  if (milliseconds < 1000) return `${milliseconds} ms`;
+  return `${(milliseconds / 1000).toFixed(1)} s`;
 }
 
 function formatChartTime(value: string, rangeMs: number, timeZone: string) {

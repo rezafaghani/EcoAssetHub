@@ -1,7 +1,9 @@
 ﻿using TimeLens.API.Infrastructure.Services;
 using TimeLens.Domain.Models;
+using TimeLens.Domain.Services;
 using TimeLens.Infrastructure.Repositories;
 using TimeLens.Infrastructure.Services;
+using TimeLens.Validation;
 
 namespace TimeLens.API.Extensions;
 
@@ -32,6 +34,11 @@ internal static class Extensions
         services.AddScoped<IIngestionControlRepository, IngestionControlRepository>();
         services.AddScoped<IExecutionRepository, ExecutionRepository>();
         services.AddScoped<IQualityRepository, QualityRepository>();
+        foreach (var pluginType in typeof(QualityValidationEngine).Assembly.GetTypes()
+            .Where(type => type is { IsAbstract: false, IsInterface: false } && typeof(IExecutionPlugin).IsAssignableFrom(type)))
+        {
+            services.AddScoped(typeof(IExecutionPlugin), pluginType);
+        }
         services.AddScoped<ExecutionPluginRegistry>();
         services.AddScoped<ExecutionRuntime>();
         services.AddSingleton<RabbitMqJobPublisher>();

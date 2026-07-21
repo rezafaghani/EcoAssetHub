@@ -138,7 +138,7 @@ public abstract class QualityValidationPlugin(
             .Select(finding => new ExecutionStepResultDto(
                 Metadata.Id,
                 context.TargetId,
-                finding.QualityStatus,
+                finding.Title == "Provider missing data" ? ExecutionRunStatuses.ProviderMissingData : finding.QualityStatus,
                 Metadata.ResultType,
                 finding.Title,
                 JsonSerializer.SerializeToElement(new
@@ -333,11 +333,14 @@ public sealed class ValueRangeValidationPlugin() : QualityValidationPlugin(
             .Select(x => x.Timestamp)
             .ToList();
 
+        var nullCount = Points(request).Count(x => x.Timestamp >= request.Start && x.Timestamp < request.End && x.Value is null);
         return invalid.Count == 0 ? [] :
         [
             QualityValidationEngine.Finding("validity.value-range", "value_validity", "warning", QualityStatuses.Degraded,
-                "Values are invalid",
-                $"{invalid.Count} values are null, non-finite, or outside configured bounds.",
+                nullCount == invalid.Count ? "Provider missing data" : "Values are invalid",
+                nullCount == invalid.Count
+                    ? $"{invalid.Count} provider data points have null values."
+                    : $"{invalid.Count} values are null, non-finite, or outside configured bounds.",
                 invalid.First(), invalid.Last(), affectedCount: invalid.Count, samples: invalid.Take(20))
         ];
     }
